@@ -29,7 +29,7 @@
     min-height:100vh;
   }
   ::selection{background:var(--gold);color:#14110F;}
-  .marquee{text-align:center;padding:36px 20px 24px;border-bottom:2px solid var(--border);position:relative;}
+  .marquee{text-align:center;padding:36px 20px 24px;border-bottom:2px solid var(--border);position:relative;cursor:pointer;}
   .marquee::before, .marquee::after{
     content:"";position:absolute;top:14px;height:6px;width:60%;max-width:420px;left:50%;
     transform:translateX(-50%);background-image:radial-gradient(circle, var(--gold) 2px, transparent 2.5px);
@@ -38,7 +38,7 @@
   .marquee::after{bottom:14px;top:auto;}
   .marquee h1{
     font-family:'Bebas Neue',sans-serif;font-size:clamp(42px,9vw,72px);letter-spacing:4px;margin:0;
-    color:var(--gold);text-shadow:0 0 24px rgba(212,165,55,0.35);
+    color:var(--gold);
   }
   .topbar{max-width:960px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:14px 20px 0;gap:10px;flex-wrap:wrap;}
   .whoami{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);}
@@ -58,7 +58,31 @@
   .screen{display:none;}
   .screen.active{display:block;}
   .searchbar{display:flex;gap:10px;margin-bottom:28px;}
-  .searchbar input{flex:1;}
+  .search-input-wrap{position:relative;flex:1;}
+  .suggestions{
+    position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--panel);
+    border:1px solid var(--border);border-radius:8px;z-index:20;max-height:340px;overflow-y:auto;
+    box-shadow:0 12px 24px rgba(0,0,0,0.35);
+  }
+  .suggestion-row{display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);}
+  .suggestion-row:last-child{border-bottom:none;}
+  .suggestion-row:hover{background:var(--panel-2);}
+  .suggestion-row img{width:32px;height:48px;object-fit:cover;border-radius:4px;background:var(--panel-2);flex-shrink:0;}
+  .suggestion-row .noposter-mini{width:32px;height:48px;border-radius:4px;background:var(--panel-2);flex-shrink:0;}
+  .suggestion-row .stitle{font-size:13px;font-weight:600;}
+  .suggestion-row .syear{font-size:12px;color:var(--muted);}
+  .statsummary{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px;}
+  .statcard{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;flex:1;min-width:130px;}
+  .statcard .num{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:700;color:var(--gold);line-height:1.1;}
+  .statcard .num.small{font-size:16px;font-weight:600;}
+  .statcard .label{font-size:12px;color:var(--muted);margin-top:6px;}
+  .barrow{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .barrow .barlabel{width:110px;flex-shrink:0;font-size:13px;font-weight:600;}
+  .barrow .barlabel.name-link{cursor:pointer;}
+  .bartrack{flex:1;background:var(--panel-2);border-radius:6px;height:20px;overflow:hidden;border:1px solid var(--border);}
+  .barfill{height:100%;background:var(--gold);border-radius:6px 0 0 6px;}
+  .barcount{width:60px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted);flex-shrink:0;}
+  .searchbar input{width:100%;}
   input[type=text], input[type=search]{
     width:100%;padding:12px 13px;border-radius:8px;border:1px solid var(--border);
     background:var(--panel-2);color:var(--ivory);font-size:16px;font-family:inherit;outline:none;
@@ -135,7 +159,7 @@
 </head>
 <body>
 
-<div class="marquee"><h1>IMDBoys</h1></div>
+<div class="marquee" id="logo-home"><h1>IMDBoys</h1></div>
 
 <div id="config-error" style="display:none;" class="config-warning">
   <strong>Firebase er ikke sat op endnu.</strong><br><br>
@@ -153,6 +177,7 @@
   <div class="navtabs">
     <button class="navbtn" id="tab-main" data-screen="screen-main">Film</button>
     <button class="navbtn" id="tab-mine" data-screen="screen-my-reviews">Mine anmeldelser</button>
+    <button class="navbtn" id="tab-stats" data-screen="screen-stats">Statistik</button>
   </div>
 </div>
 
@@ -161,7 +186,10 @@
   <!-- MAIN -->
   <div class="screen active" id="screen-main">
     <div class="searchbar">
-      <input type="search" id="search-input" placeholder="Søg efter en film...">
+      <div class="search-input-wrap">
+        <input type="search" id="search-input" placeholder="Søg efter en film..." autocomplete="off">
+        <div class="suggestions" id="search-suggestions" style="display:none;"></div>
+      </div>
       <button id="search-btn">Søg</button>
     </div>
     <div id="search-results"></div>
@@ -200,6 +228,16 @@
     <div id="profile-view-grid"></div>
   </div>
 
+  <!-- STATS -->
+  <div class="screen" id="screen-stats">
+    <div class="profile-header"><h2>Statistik</h2></div>
+    <div class="statsummary" id="stats-summary"></div>
+    <div class="section-title">Anmeldelser pr. person</div>
+    <div id="stats-people"></div>
+    <div class="section-title">Mest anmeldte genrer</div>
+    <div id="stats-genres"></div>
+  </div>
+
   <!-- MOVIE DETAIL -->
   <div class="screen" id="screen-detail">
     <button class="backbtn" id="back-btn">&larr; Tilbage</button>
@@ -217,7 +255,7 @@
 /* =========================================================================
    1) FRIENDS — fixed list, no accounts/login. Edit freely.
    ========================================================================= */
-const FRIENDS = ["Rasmus", "Mattis", "Jakob", "Amby", "Mikkel"];
+const FRIENDS = ["Rasmus", "Mattis", "Jakob", "Amby", "Mikkel", "Thomas"];
 
 /* =========================================================================
    2) TMDb — real, direct API access (this only works because the page is
@@ -231,7 +269,7 @@ const TMDB_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1N2ZmM2IzNzIxNjFjODE2OWFjNmQ
       values are meant to be public/client-side; that's normal for Firebase.
    ========================================================================= */
 const firebaseConfig = {
- apiKey: "AIzaSyBnl4hOjRB9nzg80eP3h9FWQHehQ6R11Hw",
+apiKey: "AIzaSyBnl4hOjRB9nzg80eP3h9FWQHehQ6R11Hw",
   authDomain: "imdboys.firebaseapp.com",
   projectId: "imdboys",
   storageBucket: "imdboys.firebasestorage.app",
@@ -301,7 +339,8 @@ async function saveReview(key, movie, score, comment){
   const ref = db.collection('reviews').doc(key);
   const doc = await ref.get();
   const data = doc.exists ? doc.data() : {
-    title: movie.title, year: movie.year, poster_path: movie.poster_path, overview: movie.overview || '', entries:{}
+    title: movie.title, year: movie.year, poster_path: movie.poster_path, overview: movie.overview || '',
+    genres: movie.genres || [], entries:{}
   };
   data.entries[currentUser()] = { score, comment, date: new Date().toISOString() };
   await ref.set(data);
@@ -336,15 +375,62 @@ async function fetchMovieDetail(tmdbId){
     title: m.title,
     year: (m.release_date || '').slice(0,4),
     poster_path: m.poster_path || '',
-    overview: m.overview || ''
+    overview: m.overview || '',
+    genres: (m.genres || []).map(g => g.name)
   };
 }
 
 /* ---------- search UI ---------- */
 document.getElementById('search-btn').onclick = doSearch;
-document.getElementById('search-input').addEventListener('keydown', e=>{ if(e.key==='Enter') doSearch(); });
+document.getElementById('search-input').addEventListener('keydown', e=>{
+  if(e.key==='Enter') doSearch();
+  if(e.key==='Escape') hideSuggestions();
+});
+
+let suggestTimer = null;
+document.getElementById('search-input').addEventListener('input', ()=>{
+  clearTimeout(suggestTimer);
+  const q = document.getElementById('search-input').value.trim();
+  if(q.length < 2){ hideSuggestions(); return; }
+  suggestTimer = setTimeout(()=> fetchSuggestions(q), 300);
+});
+
+document.addEventListener('click', (e)=>{
+  const wrap = document.getElementById('search-input').closest('.search-input-wrap');
+  if(wrap && !wrap.contains(e.target)) hideSuggestions();
+});
+
+function hideSuggestions(){
+  const box = document.getElementById('search-suggestions');
+  box.style.display = 'none';
+  box.innerHTML = '';
+}
+
+async function fetchSuggestions(q){
+  const box = document.getElementById('search-suggestions');
+  let top;
+  try{
+    top = (await searchMovies(q)).slice(0, 6);
+  }catch(e){ console.error(e); hideSuggestions(); return; }
+  if(!top.length){ hideSuggestions(); return; }
+  box.innerHTML = top.map((m, i)=>{
+    const url = posterUrl(m.poster_path, 'w92');
+    const imgHtml = url ? `<img src="${url}" alt="">` : `<div class="noposter-mini"></div>`;
+    return `<div class="suggestion-row" data-i="${i}">${imgHtml}<div><div class="stitle">${esc(m.title)}</div><div class="syear">${esc(m.year) || '—'}</div></div></div>`;
+  }).join('');
+  box.style.display = 'block';
+  box.querySelectorAll('[data-i]').forEach(row=>{
+    row.onclick = ()=>{
+      const m = top[parseInt(row.dataset.i, 10)];
+      hideSuggestions();
+      document.getElementById('search-input').value = m.title;
+      openMovie(m);
+    };
+  });
+}
 
 async function doSearch(){
+  hideSuggestions();
   const q = document.getElementById('search-input').value.trim();
   const resultsEl = document.getElementById('search-results');
   if(!q){ resultsEl.innerHTML=''; return; }
@@ -458,7 +544,7 @@ function renderDetail(m, key, reviewData){
   document.getElementById('save-review-btn').onclick = async ()=>{
     if(!selected){ alert('Vælg en score fra 1-10 først.'); return; }
     const comment = document.getElementById('comment-input').value.trim();
-    await saveReview(key, { title:m.title, year:m.year, poster_path: reviewData.poster_path || m.poster_path, overview }, selected, comment);
+    await saveReview(key, { title:m.title, year:m.year, poster_path: reviewData.poster_path || m.poster_path, overview, genres: m.genres || reviewData.genres || [] }, selected, comment);
     const updated = await getReview(key);
     renderDetail(m, key, updated);
     loadRecentReviews();
@@ -570,11 +656,104 @@ async function loadProfileView(name){
 }
 
 /* ---------- nav wiring ---------- */
+document.getElementById('logo-home').onclick = ()=>{ showScreen('screen-main'); loadRecentReviews(); };
 document.getElementById('tab-main').onclick = ()=>{ showScreen('screen-main'); loadRecentReviews(); };
 document.getElementById('tab-mine').onclick = ()=>{ showScreen('screen-my-reviews'); loadMyReviews(); };
+document.getElementById('tab-stats').onclick = ()=>{ showScreen('screen-stats'); loadStats(); };
 document.getElementById('mine-sort').onchange = ()=> loadMyReviews();
 document.getElementById('profile-sort').onchange = ()=> loadProfileView(state.viewingProfile);
 document.getElementById('profile-back-btn').onclick = ()=> showScreen('screen-main');
+
+/* =========================================================================
+   Statistics
+   ========================================================================= */
+function barsHtml(rows, maxCount, opts){
+  opts = opts || {};
+  return rows.map(r => {
+    const pct = maxCount ? Math.max(4, Math.round((r.count / maxCount) * 100)) : 0;
+    const labelClass = opts.clickable ? 'barlabel name-link' : 'barlabel';
+    const dataAttr = opts.clickable ? ` data-profilename="${esc(r.label)}"` : '';
+    return `
+      <div class="barrow">
+        <div class="${labelClass}"${dataAttr}>${esc(r.label)}</div>
+        <div class="bartrack"><div class="barfill" style="width:${pct}%"></div></div>
+        <div class="barcount">${esc(r.suffix ? `${r.count}${r.suffix}` : r.count)}</div>
+      </div>`;
+  }).join('');
+}
+
+async function loadStats(){
+  const summaryEl = document.getElementById('stats-summary');
+  const peopleEl = document.getElementById('stats-people');
+  const genresEl = document.getElementById('stats-genres');
+  summaryEl.innerHTML = '<div class="loading">Henter statistik...</div>';
+  peopleEl.innerHTML = '';
+  genresEl.innerHTML = '';
+
+  const all = await getAllReviews();
+  const movies = Object.values(all).filter(m => Object.keys(m.entries || {}).length > 0);
+
+  let totalReviews = 0;
+  const personStats = {};
+  FRIENDS.forEach(f => { personStats[f] = { count: 0, sum: 0 }; });
+  const genreCounts = {};
+  let topMovie = null;
+
+  movies.forEach(movie => {
+    const entries = movie.entries || {};
+    const names = Object.keys(entries);
+    totalReviews += names.length;
+    names.forEach(name => {
+      if(!personStats[name]) personStats[name] = { count: 0, sum: 0 };
+      personStats[name].count++;
+      personStats[name].sum += entries[name].score;
+    });
+    if(names.length){
+      const avg = names.reduce((s,n)=> s + entries[n].score, 0) / names.length;
+      if(!topMovie || avg > topMovie.avg) topMovie = { title: movie.title, avg };
+    }
+    (movie.genres || []).forEach(g => {
+      genreCounts[g] = (genreCounts[g] || 0) + (names.length || 1);
+    });
+  });
+
+  const peopleRows = Object.entries(personStats)
+    .map(([name, s]) => ({ label: name, count: s.count, avg: s.count ? (s.sum / s.count).toFixed(1) : null }))
+    .sort((a,b) => b.count - a.count);
+  const mostActive = peopleRows[0] && peopleRows[0].count ? peopleRows[0] : null;
+
+  summaryEl.innerHTML = `
+    <div class="statcard"><div class="num">${totalReviews}</div><div class="label">Anmeldelser i alt</div></div>
+    <div class="statcard"><div class="num">${movies.length}</div><div class="label">Film anmeldt</div></div>
+    <div class="statcard"><div class="num small">${mostActive ? esc(mostActive.label) : '—'}</div><div class="label">Mest aktive anmelder</div></div>
+    <div class="statcard"><div class="num small">${topMovie ? esc(topMovie.title) : '—'}</div><div class="label">Højeste gennemsnit${topMovie ? ` (${topMovie.avg.toFixed(1)}/10)` : ''}</div></div>
+  `;
+
+  if(!totalReviews){
+    peopleEl.innerHTML = '<div class="empty">Ingen anmeldelser endnu.</div>';
+    genresEl.innerHTML = '<div class="empty">Ingen anmeldelser endnu.</div>';
+    return;
+  }
+
+  const maxPeople = Math.max(...peopleRows.map(r => r.count), 1);
+  peopleEl.innerHTML = barsHtml(
+    peopleRows.map(r => ({ label: r.label, count: r.count, suffix: r.avg ? ` (${r.avg}/10 ⌀)` : '' })),
+    maxPeople, { clickable: true }
+  );
+  peopleEl.querySelectorAll('[data-profilename]').forEach(el=>{
+    el.onclick = () => openProfile(el.dataset.profilename);
+  });
+
+  const genreRows = Object.entries(genreCounts)
+    .map(([label, count]) => ({ label, count }))
+    .sort((a,b) => b.count - a.count);
+  if(!genreRows.length){
+    genresEl.innerHTML = '<div class="empty">Ingen genre-data endnu — de kommer i takt med at flere film bliver anmeldt.</div>';
+  } else {
+    const maxGenre = Math.max(...genreRows.map(r => r.count), 1);
+    genresEl.innerHTML = barsHtml(genreRows, maxGenre);
+  }
+}
 
 /* ---------- init ---------- */
 if(db) loadRecentReviews();
