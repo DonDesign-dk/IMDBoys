@@ -82,6 +82,10 @@
   .bartrack{flex:1;background:var(--panel-2);border-radius:6px;height:20px;overflow:hidden;border:1px solid var(--border);}
   .barfill{height:100%;background:var(--gold);border-radius:6px 0 0 6px;}
   .barcount{width:60px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted);flex-shrink:0;}
+  .viz-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:14px;}
+  .viz-container{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;}
+  .viz-container h3{margin:0 0 12px;font-size:13px;font-weight:600;color:var(--ivory);text-transform:uppercase;letter-spacing:.5px;}
+  .viz-container canvas{max-height:220px;}
   .searchbar input{width:100%;}
   input[type=text], input[type=search]{
     width:100%;padding:12px 13px;border-radius:8px;border:1px solid var(--border);
@@ -234,8 +238,15 @@
     <div class="statsummary" id="stats-summary"></div>
     <div class="section-title">Anmeldelser pr. person</div>
     <div id="stats-people"></div>
-    <div class="section-title">Mest anmeldte genrer</div>
-    <div id="stats-genres"></div>
+    <div class="section-title">Visualiseringer</div>
+    <div class="viz-grid">
+      <div class="viz-container"><h3>Vurderinger fordelt (1&ndash;10)</h3><canvas id="chart-rating-dist"></canvas></div>
+      <div class="viz-container"><h3>Anmeldelser pr. udgivelsesår</h3><canvas id="chart-year-count"></canvas></div>
+      <div class="viz-container"><h3>Gennemsnit pr. udgivelsesår</h3><canvas id="chart-year-avg"></canvas></div>
+      <div class="viz-container"><h3>Mest anmeldte genrer</h3><canvas id="chart-genres"></canvas></div>
+      <div class="viz-container"><h3>Mest anmeldte instruktører</h3><canvas id="chart-directors"></canvas><div class="empty" id="chart-directors-empty" style="display:none;">Instruktør-data kommer i takt med at flere film bliver anmeldt.</div></div>
+      <div class="viz-container"><h3>Mest anmeldte produktionsselskaber</h3><canvas id="chart-companies"></canvas><div class="empty" id="chart-companies-empty" style="display:none;">Produktionsselskab-data kommer i takt med at flere film bliver anmeldt.</div></div>
+    </div>
   </div>
 
   <!-- MOVIE DETAIL -->
@@ -250,12 +261,14 @@
 <!-- Firebase (compat SDK — simplest to embed with plain <script> tags) -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<!-- Chart.js for the statistics visualizations -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 
 <script>
 /* =========================================================================
    1) FRIENDS — fixed list, no accounts/login. Edit freely.
    ========================================================================= */
-const FRIENDS = ["Rasmus", "Mattis", "Jakob", "Amby", "Mikkel", "Thomas"];
+const FRIENDS = ["Rasmus", "Mattis", "Jakob", "Amby", "Mikkel"];
 
 /* =========================================================================
    2) TMDb — real, direct API access (this only works because the page is
@@ -340,7 +353,7 @@ async function saveReview(key, movie, score, comment){
   const doc = await ref.get();
   const data = doc.exists ? doc.data() : {
     title: movie.title, year: movie.year, poster_path: movie.poster_path, overview: movie.overview || '',
-    genres: movie.genres || [], entries:{}
+    genres: movie.genres || [], director: movie.director || '', companies: movie.companies || [], entries:{}
   };
   data.entries[currentUser()] = { score, comment, date: new Date().toISOString() };
   await ref.set(data);
@@ -366,17 +379,21 @@ async function searchMovies(query){
 }
 
 async function fetchMovieDetail(tmdbId){
-  const url = `https://api.themoviedb.org/3/movie/${tmdbId}?language=da-DK`;
+  const url = `https://api.themoviedb.org/3/movie/${tmdbId}?language=da-DK&append_to_response=credits`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${TMDB_TOKEN}`, accept: 'application/json' } });
   if(!res.ok) return null;
   const m = await res.json();
+  const crew = (m.credits && m.credits.crew) || [];
+  const directors = crew.filter(c => c.job === 'Director').map(c => c.name);
   return {
     tmdb_id: m.id,
     title: m.title,
     year: (m.release_date || '').slice(0,4),
     poster_path: m.poster_path || '',
     overview: m.overview || '',
-    genres: (m.genres || []).map(g => g.name)
+    genres: (m.genres || []).map(g => g.name),
+    director: directors.join(', '),
+    companies: (m.production_companies || []).slice(0,2).map(c => c.name)
   };
 }
 
@@ -544,7 +561,12 @@ function renderDetail(m, key, reviewData){
   document.getElementById('save-review-btn').onclick = async ()=>{
     if(!selected){ alert('Vælg en score fra 1-10 først.'); return; }
     const comment = document.getElementById('comment-input').value.trim();
-    await saveReview(key, { title:m.title, year:m.year, poster_path: reviewData.poster_path || m.poster_path, overview, genres: m.genres || reviewData.genres || [] }, selected, comment);
+    await saveReview(key, {
+      title:m.title, year:m.year, poster_path: reviewData.poster_path || m.poster_path, overview,
+      genres: m.genres || reviewData.genres || [],
+      director: m.director || reviewData.director || '',
+      companies: m.companies || reviewData.companies || []
+    }, selected, comment);
     const updated = await getReview(key);
     renderDetail(m, key, updated);
     loadRecentReviews();
@@ -685,10 +707,8 @@ function barsHtml(rows, maxCount, opts){
 async function loadStats(){
   const summaryEl = document.getElementById('stats-summary');
   const peopleEl = document.getElementById('stats-people');
-  const genresEl = document.getElementById('stats-genres');
   summaryEl.innerHTML = '<div class="loading">Henter statistik...</div>';
   peopleEl.innerHTML = '';
-  genresEl.innerHTML = '';
 
   const all = await getAllReviews();
   const movies = Object.values(all).filter(m => Object.keys(m.entries || {}).length > 0);
@@ -697,6 +717,11 @@ async function loadStats(){
   const personStats = {};
   FRIENDS.forEach(f => { personStats[f] = { count: 0, sum: 0 }; });
   const genreCounts = {};
+  const directorCounts = {};
+  const companyCounts = {};
+  const yearCounts = {};
+  const yearSums = {};
+  const ratingDist = Array.from({length:10}, () => 0);
   let topMovie = null;
 
   movies.forEach(movie => {
@@ -707,14 +732,25 @@ async function loadStats(){
       if(!personStats[name]) personStats[name] = { count: 0, sum: 0 };
       personStats[name].count++;
       personStats[name].sum += entries[name].score;
+      const v = entries[name].score;
+      if(v >= 1 && v <= 10) ratingDist[v-1]++;
     });
     if(names.length){
       const avg = names.reduce((s,n)=> s + entries[n].score, 0) / names.length;
       if(!topMovie || avg > topMovie.avg) topMovie = { title: movie.title, avg };
+
+      const year = movie.year || 'Ukendt';
+      yearCounts[year] = (yearCounts[year] || 0) + names.length;
+      yearSums[year] = (yearSums[year] || 0) + names.reduce((s,n)=> s + entries[n].score, 0);
+
+      (movie.genres || []).forEach(g => { genreCounts[g] = (genreCounts[g] || 0) + names.length; });
+      if(movie.director){
+        movie.director.split(',').map(d=>d.trim()).filter(Boolean).forEach(d=>{
+          directorCounts[d] = (directorCounts[d] || 0) + names.length;
+        });
+      }
+      (movie.companies || []).forEach(c => { companyCounts[c] = (companyCounts[c] || 0) + names.length; });
     }
-    (movie.genres || []).forEach(g => {
-      genreCounts[g] = (genreCounts[g] || 0) + (names.length || 1);
-    });
   });
 
   const peopleRows = Object.entries(personStats)
@@ -731,7 +767,7 @@ async function loadStats(){
 
   if(!totalReviews){
     peopleEl.innerHTML = '<div class="empty">Ingen anmeldelser endnu.</div>';
-    genresEl.innerHTML = '<div class="empty">Ingen anmeldelser endnu.</div>';
+    renderAllCharts(null);
     return;
   }
 
@@ -744,14 +780,106 @@ async function loadStats(){
     el.onclick = () => openProfile(el.dataset.profilename);
   });
 
-  const genreRows = Object.entries(genreCounts)
-    .map(([label, count]) => ({ label, count }))
-    .sort((a,b) => b.count - a.count);
-  if(!genreRows.length){
-    genresEl.innerHTML = '<div class="empty">Ingen genre-data endnu — de kommer i takt med at flere film bliver anmeldt.</div>';
+  const sortedYears = Object.keys(yearCounts).sort();
+  renderAllCharts({
+    ratingDist,
+    years: sortedYears,
+    yearCounts,
+    yearAvg: sortedYears.map(y => +(yearSums[y] / yearCounts[y]).toFixed(1)),
+    genreCounts,
+    directorCounts,
+    companyCounts
+  });
+}
+
+/* ---------- chart rendering (Chart.js) ---------- */
+let charts = {};
+const CHART_COLORS = ['#D4A537', '#8B2635', '#B98A2E', '#C4544E', '#E8C878', '#A64D5C'];
+
+if(window.Chart){
+  Chart.defaults.color = '#8A8078';
+  Chart.defaults.font.family = "'Inter', sans-serif";
+  Chart.defaults.borderColor = '#332C24';
+}
+
+function renderBarChart(canvasId, labels, data, opts){
+  opts = opts || {};
+  const canvas = document.getElementById(canvasId);
+  if(!canvas || !window.Chart) return;
+  if(charts[canvasId]) charts[canvasId].destroy();
+  charts[canvasId] = new Chart(canvas.getContext('2d'), {
+    type: opts.horizontal ? 'bar' : (opts.type || 'bar'),
+    data: { labels, datasets: [{ label: opts.label || '', data, backgroundColor: opts.colors || '#D4A537' }] },
+    options: {
+      indexAxis: opts.horizontal ? 'y' : 'x',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, ticks: { color: '#8A8078' }, grid: { color: '#2A241D' } },
+        y: { beginAtZero: true, ticks: { color: '#8A8078' }, grid: { color: '#2A241D' } }
+      }
+    }
+  });
+}
+
+function renderLineChart(canvasId, labels, data){
+  const canvas = document.getElementById(canvasId);
+  if(!canvas || !window.Chart) return;
+  if(charts[canvasId]) charts[canvasId].destroy();
+  charts[canvasId] = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets: [{ label: 'Gns. score', data, borderColor: '#D4A537', backgroundColor: 'rgba(212,165,55,0.12)', tension: 0.3, fill: true }] },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0, max: 10, ticks: { color: '#8A8078' }, grid: { color: '#2A241D' } },
+        x: { ticks: { color: '#8A8078' }, grid: { color: '#2A241D' } }
+      }
+    }
+  });
+}
+
+function topN(countsObj, n){
+  return Object.entries(countsObj).sort((a,b)=> b[1]-a[1]).slice(0, n);
+}
+
+function renderAllCharts(stats){
+  if(!stats){
+    ['chart-rating-dist','chart-year-count','chart-year-avg','chart-genres','chart-directors','chart-companies'].forEach(id=>{
+      if(charts[id]){ charts[id].destroy(); delete charts[id]; }
+    });
+    return;
+  }
+  renderBarChart('chart-rating-dist', ['1','2','3','4','5','6','7','8','9','10'], stats.ratingDist);
+  renderBarChart('chart-year-count', stats.years, stats.years.map(y => stats.yearCounts[y]));
+  renderLineChart('chart-year-avg', stats.years, stats.yearAvg);
+
+  const genreTop = topN(stats.genreCounts, 8);
+  renderBarChart('chart-genres', genreTop.map(g=>g[0]), genreTop.map(g=>g[1]), { horizontal:true, colors: CHART_COLORS });
+
+  const directorTop = topN(stats.directorCounts, 8);
+  const directorEmpty = document.getElementById('chart-directors-empty');
+  const directorCanvas = document.getElementById('chart-directors');
+  if(directorTop.length){
+    directorEmpty.style.display = 'none';
+    directorCanvas.style.display = 'block';
+    renderBarChart('chart-directors', directorTop.map(d=>d[0]), directorTop.map(d=>d[1]), { horizontal:true, colors: CHART_COLORS });
   } else {
-    const maxGenre = Math.max(...genreRows.map(r => r.count), 1);
-    genresEl.innerHTML = barsHtml(genreRows, maxGenre);
+    if(charts['chart-directors']){ charts['chart-directors'].destroy(); delete charts['chart-directors']; }
+    directorCanvas.style.display = 'none';
+    directorEmpty.style.display = 'block';
+  }
+
+  const companyTop = topN(stats.companyCounts, 8);
+  const companyEmpty = document.getElementById('chart-companies-empty');
+  const companyCanvas = document.getElementById('chart-companies');
+  if(companyTop.length){
+    companyEmpty.style.display = 'none';
+    companyCanvas.style.display = 'block';
+    renderBarChart('chart-companies', companyTop.map(c=>c[0]), companyTop.map(c=>c[1]), { horizontal:true, colors: CHART_COLORS });
+  } else {
+    if(charts['chart-companies']){ charts['chart-companies'].destroy(); delete charts['chart-companies']; }
+    companyCanvas.style.display = 'none';
+    companyEmpty.style.display = 'block';
   }
 }
 
