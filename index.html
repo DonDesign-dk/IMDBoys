@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>IMDBoys</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#14110F;
+    --panel:#1F1B18;
+    --panel-2:#262019;
+    --gold:#D4A537;
+    --velvet:#8B2635;
+    --ivory:#F1EAD9;
+    --muted:#8A8078;
+    --border:#332C24;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 600px at 50% -200px, rgba(212,165,55,0.08), transparent),
+      var(--bg);
+    color:var(--ivory);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+  }
+  ::selection{background:var(--gold);color:#14110F;}
+  .marquee{text-align:center;padding:36px 20px 24px;border-bottom:2px solid var(--border);position:relative;}
+  .marquee::before, .marquee::after{
+    content:"";position:absolute;top:14px;height:6px;width:60%;max-width:420px;left:50%;
+    transform:translateX(-50%);background-image:radial-gradient(circle, var(--gold) 2px, transparent 2.5px);
+    background-size:16px 6px;opacity:.55;
+  }
+  .marquee::after{bottom:14px;top:auto;}
+  .marquee h1{
+    font-family:'Bebas Neue',sans-serif;font-size:clamp(42px,9vw,72px);letter-spacing:4px;margin:0;
+    color:var(--gold);text-shadow:0 0 24px rgba(212,165,55,0.35);
+  }
+  .topbar{max-width:960px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:14px 20px 0;gap:10px;flex-wrap:wrap;}
+  .whoami{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);}
+  select.whoselect{
+    padding:7px 10px;border-radius:20px;border:1px solid var(--border);background:var(--panel);
+    color:var(--gold);font-weight:700;font-size:13px;font-family:inherit;outline:none;cursor:pointer;
+  }
+  .navtabs{display:flex;gap:6px;}
+  .navbtn{
+    background:var(--panel);border:1px solid var(--border);color:var(--muted);border-radius:20px;
+    padding:6px 14px;font-size:12px;cursor:pointer;font-weight:600;
+  }
+  .navbtn:hover{color:var(--ivory);}
+  .navbtn.active{background:var(--gold);color:#14110F;border-color:var(--gold);}
+  .wrap{max-width:960px;margin:0 auto;padding:20px 16px 80px;}
+  @media(max-width:480px){ .marquee{padding:26px 16px 18px;} .wrap{padding:16px 12px 70px;} .searchbar{flex-wrap:nowrap;} }
+  .screen{display:none;}
+  .screen.active{display:block;}
+  .searchbar{display:flex;gap:10px;margin-bottom:28px;}
+  .searchbar input{flex:1;}
+  input[type=text], input[type=search]{
+    width:100%;padding:12px 13px;border-radius:8px;border:1px solid var(--border);
+    background:var(--panel-2);color:var(--ivory);font-size:16px;font-family:inherit;outline:none;
+  }
+  input:focus{border-color:var(--gold);}
+  .searchbar button{
+    padding:0 22px;border-radius:8px;border:1px solid var(--gold);background:transparent;
+    color:var(--gold);font-weight:600;cursor:pointer;
+  }
+  .section-title{font-family:'Bebas Neue',sans-serif;letter-spacing:2px;font-size:20px;color:var(--muted);margin:32px 0 14px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:14px;}
+  @media(min-width:600px){ .grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:18px;} }
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;
+    cursor:pointer;transition:transform .15s, border-color .15s;position:relative;}
+  .card:hover{transform:translateY(-3px);border-color:var(--gold);}
+  .card img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block;background:var(--panel-2);}
+  .card .noposter{width:100%;aspect-ratio:2/3;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;text-align:center;padding:10px;}
+  .card .meta{padding:10px 10px 12px;}
+  .card .meta h4{margin:0 0 2px;font-size:14px;font-weight:600;line-height:1.25;}
+  .card .meta .year{color:var(--muted);font-size:12px;}
+  .card .scorebadge{
+    position:absolute;top:8px;right:8px;background:rgba(20,17,15,0.88);border:1px solid var(--gold);
+    color:var(--gold);font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px;border-radius:6px;padding:2px 6px;
+  }
+  .card .cardcomment{padding:0 10px 10px;color:var(--muted);font-size:12px;line-height:1.4;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .backbtn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;margin-bottom:18px;}
+  .backbtn:hover{color:var(--gold);}
+  .detail{display:grid;grid-template-columns:180px 1fr;gap:28px;}
+  @media(max-width:560px){.detail{grid-template-columns:1fr;}}
+  .detail img{width:100%;border-radius:var(--radius);border:1px solid var(--border);}
+  .detail .noposter{aspect-ratio:2/3;border-radius:var(--radius);border:1px solid var(--border);background:var(--panel);
+    display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;}
+  .detail h2{font-family:'Bebas Neue',sans-serif;font-size:34px;letter-spacing:1px;margin:0 0 4px;color:var(--ivory);}
+  .detail .year{color:var(--muted);margin-bottom:10px;}
+  .detail .overview{color:var(--ivory);opacity:.85;font-size:14px;line-height:1.55;margin-bottom:18px;}
+  .avgbox{display:inline-flex;align-items:baseline;gap:8px;background:var(--panel);border:1px solid var(--border);
+    border-radius:8px;padding:10px 16px;margin-bottom:22px;}
+  .avgbox .num{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;color:var(--gold);}
+  .avgbox .of10{color:var(--muted);font-size:13px;}
+  .rateform{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:24px;}
+  label{display:block;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
+  .scores-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+  .scorebtn{width:44px;height:44px;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);
+    color:var(--ivory);cursor:pointer;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;}
+  .scorebtn.active{background:var(--gold);color:#14110F;border-color:var(--gold);}
+  textarea{width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);
+    color:var(--ivory);font-family:inherit;font-size:14px;resize:vertical;min-height:60px;margin-bottom:12px;}
+  button.primary{width:100%;padding:12px;border-radius:8px;border:none;background:var(--gold);color:#14110F;
+    font-weight:700;font-size:15px;cursor:pointer;}
+  button.primary:hover{filter:brightness(1.08);}
+  .friendlist{display:flex;flex-direction:column;gap:10px;}
+  .friendrow{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;background:var(--panel);
+    border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
+  .friendrow .name{font-weight:600;font-size:14px;}
+  .name-link{cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;}
+  .name-link:hover{color:var(--gold);text-decoration-color:var(--gold);}
+  .friendrow .comment{color:var(--muted);font-size:13px;margin-top:3px;}
+  .friendrow .score{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--gold);font-size:16px;white-space:nowrap;}
+  .empty{color:var(--muted);font-size:14px;padding:20px 0;}
+  .loading{color:var(--muted);padding:20px 0;font-size:14px;}
+  .sortrow{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;}
+  .sortrow label{margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--muted);}
+  select.sortselect{padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--panel-2);
+    color:var(--ivory);font-size:14px;font-family:inherit;outline:none;cursor:pointer;}
+  select.sortselect:focus{border-color:var(--gold);}
+  .profile-header{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:18px;flex-wrap:wrap;}
+  .profile-header h2{font-family:'Bebas Neue',sans-serif;letter-spacing:1px;font-size:30px;margin:0;color:var(--ivory);}
+  .profile-header .count{color:var(--muted);font-size:13px;}
+  .config-warning{max-width:600px;margin:60px auto;background:var(--panel);border:1px solid var(--velvet);
+    border-radius:var(--radius);padding:24px;color:var(--ivory);font-size:14px;line-height:1.6;}
+  .config-warning code{background:var(--panel-2);padding:1px 6px;border-radius:4px;color:var(--gold);}
+</style>
+</head>
+<body>
+
+<div class="marquee"><h1>IMDBoys</h1></div>
+
+<div id="config-error" style="display:none;" class="config-warning">
+  <strong>Firebase er ikke sat op endnu.</strong><br><br>
+  Åbn <code>index.html</code>, find <code>const firebaseConfig</code> nær toppen af scriptet, og indsæt jeres egen
+  Firebase-konfiguration derinde (fra Firebase Console &rarr; Project settings &rarr; Your apps). Gem filen og genindlæs siden.
+</div>
+
+<div id="app-root">
+
+<div class="topbar">
+  <div class="whoami">
+    Jeg er
+    <select class="whoselect" id="who-select"></select>
+  </div>
+  <div class="navtabs">
+    <button class="navbtn" id="tab-main" data-screen="screen-main">Film</button>
+    <button class="navbtn" id="tab-mine" data-screen="screen-my-reviews">Mine anmeldelser</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- MAIN -->
+  <div class="screen active" id="screen-main">
+    <div class="searchbar">
+      <input type="search" id="search-input" placeholder="Søg efter en film...">
+      <button id="search-btn">Søg</button>
+    </div>
+    <div id="search-results"></div>
+    <div class="section-title">Seneste anmeldelser i gruppen</div>
+    <div id="recent-reviews" class="friendlist"><div class="empty">Ingen anmeldelser endnu &mdash; find en film og bliv den første.</div></div>
+  </div>
+
+  <!-- MY REVIEWS -->
+  <div class="screen" id="screen-my-reviews">
+    <div class="profile-header"><h2 id="mine-title">Mine anmeldelser</h2><span class="count" id="mine-count"></span></div>
+    <div class="sortrow">
+      <label for="mine-sort">Sortér</label>
+      <select class="sortselect" id="mine-sort">
+        <option value="date">Nyeste anmeldt</option>
+        <option value="title">A&ndash;Å</option>
+        <option value="best">Bedst anmeldt</option>
+        <option value="worst">Dårligst anmeldt</option>
+      </select>
+    </div>
+    <div id="mine-grid"></div>
+  </div>
+
+  <!-- OTHER PROFILE -->
+  <div class="screen" id="screen-profile-view">
+    <button class="backbtn" id="profile-back-btn">&larr; Tilbage</button>
+    <div class="profile-header"><h2 id="profile-view-name"></h2><span class="count" id="profile-view-count"></span></div>
+    <div class="sortrow">
+      <label for="profile-sort">Sortér</label>
+      <select class="sortselect" id="profile-sort">
+        <option value="date">Nyeste anmeldt</option>
+        <option value="title">A&ndash;Å</option>
+        <option value="best">Bedst anmeldt</option>
+        <option value="worst">Dårligst anmeldt</option>
+      </select>
+    </div>
+    <div id="profile-view-grid"></div>
+  </div>
+
+  <!-- MOVIE DETAIL -->
+  <div class="screen" id="screen-detail">
+    <button class="backbtn" id="back-btn">&larr; Tilbage</button>
+    <div id="detail-content"></div>
+  </div>
+
+</div>
+</div>
+
+<!-- Firebase (compat SDK — simplest to embed with plain <script> tags) -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+<script>
+/* =========================================================================
+   1) FRIENDS — fixed list, no accounts/login. Edit freely.
+   ========================================================================= */
+const FRIENDS = ["Rasmus", "Mattis", "Jakob", "Amby", "Mikkel"];
+
+/* =========================================================================
+   2) TMDb — real, direct API access (this only works because the page is
+      hosted normally, e.g. on GitHub Pages — NOT inside a Claude artifact).
+   ========================================================================= */
+const TMDB_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1N2ZmM2IzNzIxNjFjODE2OWFjNmQzZGJmZDNjMTA5OSIsIm5iZiI6MTc4NDI3MTk1NS40NDIsInN1YiI6IjZhNTlkNDUzMzcyNWQ1MmU4YjcwZjA4ZCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.U34NqWN9q11a13Z0WRd-N4EEI97c6YSp2xPpd8atkSI";
+
+/* =========================================================================
+   3) FIREBASE — paste your own project's config here (Firebase Console ->
+      Project settings -> Your apps -> Web app -> "Config"). All these
+      values are meant to be public/client-side; that's normal for Firebase.
+   ========================================================================= */
+const firebaseConfig = {
+ apiKey: "AIzaSyBnl4hOjRB9nzg80eP3h9FWQHehQ6R11Hw",
+  authDomain: "imdboys.firebaseapp.com",
+  projectId: "imdboys",
+  storageBucket: "imdboys.firebasestorage.app",
+  messagingSenderId: "563352401406",
+  appId: "1:563352401406:web:38eb05850799330f397caf",
+  measurementId: "G-P4YMJEGRQN"
+};
+
+let db = null;
+try{
+  if(firebaseConfig.apiKey && firebaseConfig.apiKey.indexOf("PASTE_YOUR") === -1){
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+  } else {
+    document.getElementById('config-error').style.display = 'block';
+    document.getElementById('app-root').style.display = 'none';
+  }
+}catch(e){
+  console.error(e);
+  document.getElementById('config-error').style.display = 'block';
+  document.getElementById('app-root').style.display = 'none';
+}
+
+/* ---------- state & small helpers ---------- */
+const state = { currentMovie:null, viewingProfile:null };
+
+function esc(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.navbtn').forEach(b=> b.classList.toggle('active', b.dataset.screen === id));
+}
+function currentUser(){ return document.getElementById('who-select').value; }
+function posterUrl(path, size){ return path ? `https://image.tmdb.org/t/p/${size||'w342'}${path}` : ''; }
+function movieKey(tmdbId){ return `tmdb-${tmdbId}`; }
+
+/* ---------- who-select setup ---------- */
+(function initWhoSelect(){
+  const sel = document.getElementById('who-select');
+  FRIENDS.forEach(name=>{
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    sel.appendChild(opt);
+  });
+  const saved = localStorage.getItem('imdboys-who');
+  if(saved && FRIENDS.includes(saved)) sel.value = saved;
+  sel.addEventListener('change', ()=>{
+    localStorage.setItem('imdboys-who', sel.value);
+    if(document.getElementById('screen-my-reviews').classList.contains('active')) loadMyReviews();
+  });
+})();
+
+/* ---------- Firestore helpers ---------- */
+async function getAllReviews(){
+  if(!db) return {};
+  const snap = await db.collection('reviews').get();
+  const all = {};
+  snap.forEach(doc => { all[doc.id] = doc.data(); });
+  return all;
+}
+async function getReview(key){
+  if(!db) return null;
+  const doc = await db.collection('reviews').doc(key).get();
+  return doc.exists ? doc.data() : null;
+}
+async function saveReview(key, movie, score, comment){
+  const ref = db.collection('reviews').doc(key);
+  const doc = await ref.get();
+  const data = doc.exists ? doc.data() : {
+    title: movie.title, year: movie.year, poster_path: movie.poster_path, overview: movie.overview || '', entries:{}
+  };
+  data.entries[currentUser()] = { score, comment, date: new Date().toISOString() };
+  await ref.set(data);
+}
+
+/* =========================================================================
+   TMDb search & detail
+   ========================================================================= */
+async function searchMovies(query){
+  const url = `https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(query)}&include_adult=false&language=da-DK&page=1`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${TMDB_TOKEN}`, accept: 'application/json' } });
+  if(!res.ok) throw new Error('TMDb search failed: ' + res.status);
+  const data = await res.json();
+  const results = (data.results || []).map(m => ({
+    tmdb_id: m.id,
+    title: m.title,
+    year: (m.release_date || '').slice(0,4),
+    poster_path: m.poster_path || '',
+    overview: m.overview || ''
+  }));
+  results.sort((a,b) => (parseInt(b.year,10)||0) - (parseInt(a.year,10)||0));
+  return results;
+}
+
+async function fetchMovieDetail(tmdbId){
+  const url = `https://api.themoviedb.org/3/movie/${tmdbId}?language=da-DK`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${TMDB_TOKEN}`, accept: 'application/json' } });
+  if(!res.ok) return null;
+  const m = await res.json();
+  return {
+    tmdb_id: m.id,
+    title: m.title,
+    year: (m.release_date || '').slice(0,4),
+    poster_path: m.poster_path || '',
+    overview: m.overview || ''
+  };
+}
+
+/* ---------- search UI ---------- */
+document.getElementById('search-btn').onclick = doSearch;
+document.getElementById('search-input').addEventListener('keydown', e=>{ if(e.key==='Enter') doSearch(); });
+
+async function doSearch(){
+  const q = document.getElementById('search-input').value.trim();
+  const resultsEl = document.getElementById('search-results');
+  if(!q){ resultsEl.innerHTML=''; return; }
+  resultsEl.innerHTML = '<div class="loading">Søger efter film...</div>';
+  try{
+    const movies = await searchMovies(q);
+    renderResults(movies);
+  }catch(e){
+    console.error(e);
+    resultsEl.innerHTML = '<div class="loading">Kunne ikke søge lige nu &mdash; tjek TMDb-nøglen eller prøv igen om lidt.</div>';
+  }
+}
+
+function renderResults(movies){
+  const resultsEl = document.getElementById('search-results');
+  if(!movies.length){ resultsEl.innerHTML = '<div class="loading">Ingen film fundet.</div>'; return; }
+  resultsEl.innerHTML = '<div class="section-title" style="margin-top:0;">Søgeresultater</div><div class="grid" id="results-grid"></div>';
+  const grid = document.getElementById('results-grid');
+  movies.forEach(m=>{
+    const card = document.createElement('div');
+    card.className = 'card';
+    const url = posterUrl(m.poster_path);
+    const imgHtml = url
+      ? `<img src="${url}" alt="${esc(m.title)}" onerror="this.outerHTML='<div class=&quot;noposter&quot;>Intet cover</div>'">`
+      : `<div class="noposter">Intet cover</div>`;
+    card.innerHTML = `${imgHtml}<div class="meta"><h4>${esc(m.title)}</h4><div class="year">${esc(m.year) || '—'}</div></div>`;
+    card.onclick = ()=> openMovie(m);
+    grid.appendChild(card);
+  });
+}
+
+/* ---------- detail screen ---------- */
+async function openMovie(m){
+  state.currentMovie = m;
+  showScreen('screen-detail');
+  document.getElementById('detail-content').innerHTML = '<div class="loading">Henter filminfo...</div>';
+  const key = movieKey(m.tmdb_id);
+  const [detail, review] = await Promise.all([
+    fetchMovieDetail(m.tmdb_id).catch(()=>null),
+    getReview(key)
+  ]);
+  const full = detail || m;
+  renderDetail(full, key, review || { title: full.title, year: full.year, poster_path: full.poster_path, overview: full.overview, entries:{} });
+}
+
+function renderDetail(m, key, reviewData){
+  const entries = reviewData.entries || {};
+  const names = Object.keys(entries);
+  const avg = names.length ? (names.reduce((s,n)=>s+entries[n].score,0)/names.length).toFixed(1) : null;
+  const me = currentUser();
+  const mine = entries[me];
+  const url = posterUrl(reviewData.poster_path || m.poster_path);
+
+  const posterHtml = url
+    ? `<img src="${url}" alt="" onerror="this.outerHTML='<div class=&quot;noposter&quot;>Intet cover</div>'">`
+    : `<div class="noposter">Intet cover</div>`;
+
+  const overview = reviewData.overview || m.overview || '';
+
+  const el = document.getElementById('detail-content');
+  el.innerHTML = `
+    <div class="detail">
+      <div>${posterHtml}</div>
+      <div>
+        <h2>${esc(m.title)}</h2>
+        <div class="year">${esc(m.year) || '—'}</div>
+        ${overview ? `<div class="overview">${esc(overview)}</div>` : ''}
+        ${avg ? `<div class="avgbox"><span class="num">${avg}</span><span class="of10">/10 &middot; ${names.length} anmeldelse${names.length===1?'':'r'}</span></div>` : ''}
+
+        <div class="rateform">
+          <label>${esc(me)}s score (1&ndash;10)</label>
+          <div class="scores-row" id="score-row"></div>
+          <label>Kommentar (valgfri)</label>
+          <textarea id="comment-input" placeholder="Hvad synes du?">${mine ? esc(mine.comment||'') : ''}</textarea>
+          <button class="primary" id="save-review-btn">${mine ? 'Opdatér din anmeldelse' : 'Gem din anmeldelse'}</button>
+        </div>
+
+        <div class="section-title" style="margin-top:0;">Gruppens anmeldelser</div>
+        <div class="friendlist" id="friendlist">
+          ${names.length ? names.map(n=>`
+            <div class="friendrow">
+              <div>
+                <div class="name name-link" data-profilename="${esc(n)}">${esc(n)}</div>
+                ${entries[n].comment ? `<div class="comment">${esc(entries[n].comment)}</div>` : ''}
+              </div>
+              <div class="score">${entries[n].score}/10</div>
+            </div>`).join('') : '<div class="empty">Ingen har anmeldt den her endnu &mdash; vær den første.</div>'}
+        </div>
+      </div>
+    </div>
+  `;
+
+  el.querySelectorAll('[data-profilename]').forEach(nameEl=>{
+    nameEl.onclick = (e)=>{ e.stopPropagation(); openProfile(nameEl.dataset.profilename); };
+  });
+
+  let selected = mine ? mine.score : null;
+  const row = document.getElementById('score-row');
+  for(let i=1;i<=10;i++){
+    const b = document.createElement('button');
+    b.className = 'scorebtn' + (selected===i ? ' active':'');
+    b.textContent = i;
+    b.onclick = ()=>{
+      selected = i;
+      row.querySelectorAll('.scorebtn').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+    };
+    row.appendChild(b);
+  }
+
+  document.getElementById('save-review-btn').onclick = async ()=>{
+    if(!selected){ alert('Vælg en score fra 1-10 først.'); return; }
+    const comment = document.getElementById('comment-input').value.trim();
+    await saveReview(key, { title:m.title, year:m.year, poster_path: reviewData.poster_path || m.poster_path, overview }, selected, comment);
+    const updated = await getReview(key);
+    renderDetail(m, key, updated);
+    loadRecentReviews();
+  };
+}
+
+document.getElementById('back-btn').onclick = ()=> showScreen('screen-main');
+
+/* ---------- recent reviews (home screen) ---------- */
+async function loadRecentReviews(){
+  const el = document.getElementById('recent-reviews');
+  const all = await getAllReviews();
+  const rows = [];
+  for(const [key, movie] of Object.entries(all)){
+    for(const [name, r] of Object.entries(movie.entries||{})){
+      rows.push({ key, title:movie.title, year:movie.year, poster_path:movie.poster_path, overview:movie.overview, name, ...r });
+    }
+  }
+  rows.sort((a,b)=> new Date(b.date) - new Date(a.date));
+  if(!rows.length){ el.innerHTML = '<div class="empty">Ingen anmeldelser endnu &mdash; find en film og bliv den første.</div>'; return; }
+  el.innerHTML = rows.slice(0,10).map(r=>`
+    <div class="friendrow" style="cursor:pointer;" data-key="${esc(r.key)}">
+      <div>
+        <div class="name"><span class="name-link" data-profilename="${esc(r.name)}">${esc(r.name)}</span> &middot; <span style="color:var(--muted);font-weight:400;">${esc(r.title)}</span></div>
+        ${r.comment ? `<div class="comment">${esc(r.comment)}</div>` : ''}
+      </div>
+      <div class="score">${r.score}/10</div>
+    </div>
+  `).join('');
+  el.querySelectorAll('[data-profilename]').forEach(nameEl=>{
+    nameEl.onclick = (e)=>{ e.stopPropagation(); openProfile(nameEl.dataset.profilename); };
+  });
+  el.querySelectorAll('[data-key]').forEach(row=>{
+    row.onclick = ()=>{
+      const r = rows.find(x=>x.key===row.dataset.key);
+      openMovie({ tmdb_id: r.key.replace('tmdb-',''), title:r.title, year:r.year, poster_path:r.poster_path, overview:r.overview });
+    };
+  });
+}
+
+/* =========================================================================
+   My reviews / other profiles
+   ========================================================================= */
+function sortReviewRows(rows, mode){
+  const copy = rows.slice();
+  if(mode === 'title') copy.sort((a,b)=> a.title.localeCompare(b.title, 'da'));
+  else if(mode === 'best') copy.sort((a,b)=> b.score - a.score || a.title.localeCompare(b.title,'da'));
+  else if(mode === 'worst') copy.sort((a,b)=> a.score - b.score || a.title.localeCompare(b.title,'da'));
+  else copy.sort((a,b)=> new Date(b.date) - new Date(a.date));
+  return copy;
+}
+
+function renderReviewGrid(gridEl, countEl, rows, emptyText){
+  countEl.textContent = rows.length ? `${rows.length} anmeldelse${rows.length===1?'':'r'}` : '';
+  if(!rows.length){ gridEl.innerHTML = `<div class="empty">${emptyText}</div>`; return; }
+  gridEl.innerHTML = `<div class="grid">${rows.map(r=>{
+    const url = posterUrl(r.poster_path);
+    const imgHtml = url
+      ? `<img src="${url}" alt="${esc(r.title)}" onerror="this.outerHTML='<div class=&quot;noposter&quot;>Intet cover</div>'">`
+      : `<div class="noposter">Intet cover</div>`;
+    return `
+      <div class="card" data-key="${esc(r.key)}">
+        ${imgHtml}
+        <div class="scorebadge">${r.score}/10</div>
+        <div class="meta"><h4>${esc(r.title)}</h4><div class="year">${esc(r.year) || '—'}</div></div>
+        ${r.comment ? `<div class="cardcomment">${esc(r.comment)}</div>` : ''}
+      </div>`;
+  }).join('')}</div>`;
+  gridEl.querySelectorAll('[data-key]').forEach(card=>{
+    card.onclick = ()=>{
+      const r = rows.find(x=>x.key===card.dataset.key);
+      openMovie({ tmdb_id: r.key.replace('tmdb-',''), title:r.title, year:r.year, poster_path:r.poster_path, overview:r.overview });
+    };
+  });
+}
+
+async function reviewRowsForName(name){
+  const all = await getAllReviews();
+  const rows = [];
+  for(const [key, movie] of Object.entries(all)){
+    const entry = (movie.entries||{})[name];
+    if(entry) rows.push({ key, title:movie.title, year:movie.year, poster_path:movie.poster_path, overview:movie.overview, ...entry });
+  }
+  return rows;
+}
+
+async function loadMyReviews(){
+  document.getElementById('mine-title').textContent = `${currentUser()}s anmeldelser`;
+  const mode = document.getElementById('mine-sort').value;
+  const rows = sortReviewRows(await reviewRowsForName(currentUser()), mode);
+  renderReviewGrid(document.getElementById('mine-grid'), document.getElementById('mine-count'), rows,
+    'Ingen anmeldelser endnu &mdash; find en film under "Film".');
+}
+
+async function openProfile(name){
+  state.viewingProfile = name;
+  document.getElementById('profile-view-name').textContent = name;
+  document.getElementById('profile-sort').value = 'date';
+  showScreen('screen-profile-view');
+  await loadProfileView(name);
+}
+
+async function loadProfileView(name){
+  if(!name) return;
+  const mode = document.getElementById('profile-sort').value;
+  const rows = sortReviewRows(await reviewRowsForName(name), mode);
+  renderReviewGrid(document.getElementById('profile-view-grid'), document.getElementById('profile-view-count'), rows,
+    `${esc(name)} har ikke anmeldt noget endnu.`);
+}
+
+/* ---------- nav wiring ---------- */
+document.getElementById('tab-main').onclick = ()=>{ showScreen('screen-main'); loadRecentReviews(); };
+document.getElementById('tab-mine').onclick = ()=>{ showScreen('screen-my-reviews'); loadMyReviews(); };
+document.getElementById('mine-sort').onchange = ()=> loadMyReviews();
+document.getElementById('profile-sort').onchange = ()=> loadProfileView(state.viewingProfile);
+document.getElementById('profile-back-btn').onclick = ()=> showScreen('screen-main');
+
+/* ---------- init ---------- */
+if(db) loadRecentReviews();
+</script>
+</body>
+</html>
