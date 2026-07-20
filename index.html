@@ -138,6 +138,11 @@
   button.primary{width:100%;padding:12px;border-radius:8px;border:none;background:var(--gold);color:#14110F;
     font-weight:700;font-size:15px;cursor:pointer;}
   button.primary:hover{filter:brightness(1.08);}
+  button.deletebtn{
+    width:100%;padding:10px;margin-top:8px;border-radius:8px;border:1px solid var(--velvet);
+    background:transparent;color:#D9847C;font-weight:600;font-size:13px;cursor:pointer;
+  }
+  button.deletebtn:hover{background:rgba(139,38,53,0.15);}
   .friendlist{display:flex;flex-direction:column;gap:10px;}
   .friendrow{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;background:var(--panel);
     border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
@@ -282,7 +287,7 @@ const TMDB_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1N2ZmM2IzNzIxNjFjODE2OWFjNmQ
       values are meant to be public/client-side; that's normal for Firebase.
    ========================================================================= */
 const firebaseConfig = {
-apiKey: "AIzaSyBnl4hOjRB9nzg80eP3h9FWQHehQ6R11Hw",
+  apiKey: "AIzaSyBnl4hOjRB9nzg80eP3h9FWQHehQ6R11Hw",
   authDomain: "imdboys.firebaseapp.com",
   projectId: "imdboys",
   storageBucket: "imdboys.firebasestorage.app",
@@ -357,6 +362,11 @@ async function saveReview(key, movie, score, comment){
   };
   data.entries[currentUser()] = { score, comment, date: new Date().toISOString() };
   await ref.set(data);
+}
+
+async function deleteReview(key, name){
+  const ref = db.collection('reviews').doc(key);
+  await ref.update({ [`entries.${name}`]: firebase.firestore.FieldValue.delete() });
 }
 
 /* =========================================================================
@@ -523,6 +533,7 @@ function renderDetail(m, key, reviewData){
           <label>Kommentar (valgfri)</label>
           <textarea id="comment-input" placeholder="Hvad synes du?">${mine ? esc(mine.comment||'') : ''}</textarea>
           <button class="primary" id="save-review-btn">${mine ? 'Opdatér din anmeldelse' : 'Gem din anmeldelse'}</button>
+          ${mine ? `<button class="deletebtn" id="delete-review-btn">Slet din anmeldelse</button>` : ''}
         </div>
 
         <div class="section-title" style="margin-top:0;">Gruppens anmeldelser</div>
@@ -571,6 +582,17 @@ function renderDetail(m, key, reviewData){
     renderDetail(m, key, updated);
     loadRecentReviews();
   };
+
+  const deleteBtn = document.getElementById('delete-review-btn');
+  if(deleteBtn){
+    deleteBtn.onclick = async ()=>{
+      if(!confirm(`Er du sikker på at du vil slette ${esc(me)}s anmeldelse af "${esc(m.title)}"?`)) return;
+      await deleteReview(key, me);
+      const updated = await getReview(key);
+      renderDetail(m, key, updated);
+      loadRecentReviews();
+    };
+  }
 }
 
 document.getElementById('back-btn').onclick = ()=> showScreen('screen-main');
