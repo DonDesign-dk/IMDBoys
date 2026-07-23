@@ -37,13 +37,30 @@
     padding:16px 24px;gap:14px;flex-wrap:wrap;background:rgba(10,10,12,0.85);backdrop-filter:blur(10px);
     border-bottom:1px solid var(--border);
   }
-  .logo{display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:800;font-size:17px;letter-spacing:.2px;}
+  .logo{display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:800;font-size:21px;letter-spacing:.2px;}
   .logo .mark{color:var(--accent);}
   .whoami{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);}
   select.whoselect{
     padding:7px 12px;border-radius:20px;border:1px solid var(--border);background:var(--panel);
     color:var(--text);font-weight:600;font-size:13px;font-family:inherit;outline:none;cursor:pointer;
   }
+  .avatar-picker-wrap{position:relative;}
+  .avatar-btn{
+    width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:var(--panel-2);
+    cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;padding:0;
+    color:var(--accent);font-weight:700;overflow:hidden;
+  }
+  .avatar-btn:hover{border-color:var(--accent);}
+  .avatar-popover{
+    position:absolute;top:calc(100% + 8px);right:0;background:var(--panel);border:1px solid var(--border);
+    border-radius:14px;padding:10px;display:grid;grid-template-columns:repeat(5,1fr);gap:6px;z-index:40;
+    box-shadow:0 16px 32px rgba(0,0,0,0.5);
+  }
+  .avatar-option{
+    width:34px;height:34px;border-radius:50%;border:1px solid var(--border);background:var(--panel-2);
+    font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  }
+  .avatar-option:hover, .avatar-option.selected{border-color:var(--accent);background:var(--accent-dim);}
   .navtabs{display:flex;gap:6px;flex-wrap:wrap;}
   .navbtn{
     background:transparent;border:1px solid transparent;color:var(--muted);border-radius:20px;
@@ -170,7 +187,9 @@
   .avatar-circle{
     width:36px;height:36px;border-radius:50%;background:var(--accent-dim);color:var(--accent);
     display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;
+    overflow:hidden;
   }
+  .avatar-circle.avatar-sm{width:24px;height:24px;font-size:12px;}
   .friendrow .rowbody{flex:1;min-width:0;}
   .friendrow .rowtop{display:flex;justify-content:space-between;align-items:center;gap:8px;}
   .friendrow .name{font-weight:600;font-size:14px;}
@@ -178,6 +197,14 @@
   .name-link:hover{color:var(--accent);text-decoration-color:var(--accent);}
   .friendrow .comment{color:var(--muted);font-size:13px;margin-top:5px;line-height:1.5;}
   .friendrow .score{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent);font-size:15px;white-space:nowrap;}
+  .reactions{display:flex;gap:6px;margin-top:10px;}
+  .reactbtn{
+    background:var(--panel-2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;
+    font-size:13px;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:5px;line-height:1;
+  }
+  .reactbtn:hover{border-color:var(--accent);}
+  .reactbtn.active{border-color:var(--accent);background:var(--accent-dim);}
+  .reactbtn .rcount{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);}
   .empty{color:var(--muted);font-size:14px;padding:20px 0;}
   .loading{color:var(--muted);padding:20px 0;font-size:14px;}
 
@@ -239,6 +266,10 @@
   <div class="whoami">
     Jeg er
     <select class="whoselect" id="who-select"></select>
+    <div class="avatar-picker-wrap">
+      <button class="avatar-btn" id="my-avatar-btn" title="Vælg profilbillede"></button>
+      <div class="avatar-popover" id="avatar-popover" style="display:none;"></div>
+    </div>
   </div>
 </div>
 
@@ -260,6 +291,7 @@
 
   <!-- MY REVIEWS -->
   <div class="screen" id="screen-my-reviews">
+    <button class="backbtn" id="mine-back-btn">&larr; Tilbage</button>
     <div class="profile-header"><h2 id="mine-title">Mine anmeldelser</h2><span class="count" id="mine-count"></span></div>
     <div class="sortrow">
       <label for="mine-sort">Sortér</label>
@@ -291,6 +323,7 @@
 
   <!-- STATS -->
   <div class="screen" id="screen-stats">
+    <button class="backbtn" id="stats-back-btn">&larr; Tilbage</button>
     <div class="profile-header"><h2>Statistik</h2></div>
     <div class="statsummary" id="stats-summary"></div>
     <div class="section-title">Anmeldelser pr. person</div>
@@ -364,7 +397,9 @@ try{
 }
 
 /* ---------- state & small helpers ---------- */
-const state = { currentMovie:null, viewingProfile:null };
+const state = { currentMovie:null, viewingProfile:null, lastKey:null, lastReviewData:null };
+const AVATAR_OPTIONS = ['🎬','🍿','👽','🐉','🤖','🧛','🦸','🐙','🎃','⚡','🥷','🦖'];
+let PROFILES = {};
 
 function esc(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function showScreen(id){
@@ -379,6 +414,63 @@ function profileUrl(path, size){ return path ? `https://image.tmdb.org/t/p/${siz
 function movieKey(tmdbId){ return `tmdb-${tmdbId}`; }
 function initials(name){ return (name||'').split(' ').filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join(''); }
 
+function avatarHtml(name, sizeClass){
+  const p = PROFILES[name];
+  const cls = 'avatar-circle' + (sizeClass ? ` ${sizeClass}` : '');
+  if(p && p.avatar) return `<div class="${cls}">${p.avatar}</div>`;
+  return `<div class="${cls}">${esc(initials(name))}</div>`;
+}
+
+async function loadProfiles(){
+  if(!db) return;
+  const snap = await db.collection('profiles').get();
+  const map = {};
+  snap.forEach(d => { map[d.id] = d.data(); });
+  PROFILES = map;
+}
+
+function updateMyAvatarBtn(){
+  const btn = document.getElementById('my-avatar-btn');
+  const me = currentUser();
+  const p = PROFILES[me];
+  btn.textContent = p && p.avatar ? p.avatar : initials(me);
+}
+
+function renderAvatarPopover(){
+  const pop = document.getElementById('avatar-popover');
+  const me = currentUser();
+  const current = PROFILES[me] && PROFILES[me].avatar;
+  pop.innerHTML = AVATAR_OPTIONS.map(a => `<button class="avatar-option${a===current?' selected':''}" data-avatar="${a}">${a}</button>`).join('');
+  pop.querySelectorAll('[data-avatar]').forEach(b=>{
+    b.onclick = async ()=>{
+      await db.collection('profiles').doc(me).set({ avatar: b.dataset.avatar });
+      await loadProfiles();
+      updateMyAvatarBtn();
+      pop.style.display = 'none';
+      refreshVisibleAvatars();
+    };
+  });
+}
+
+function refreshVisibleAvatars(){
+  if(document.getElementById('screen-main').classList.contains('active')) loadRecentReviews();
+  if(document.getElementById('screen-detail').classList.contains('active') && state.currentMovie && state.lastKey){
+    renderDetail(state.currentMovie, state.lastKey, state.lastReviewData);
+  }
+}
+
+document.getElementById('my-avatar-btn').onclick = (e)=>{
+  e.stopPropagation();
+  renderAvatarPopover();
+  const pop = document.getElementById('avatar-popover');
+  pop.style.display = pop.style.display === 'block' ? 'none' : 'block';
+};
+document.addEventListener('click', (e)=>{
+  const pop = document.getElementById('avatar-popover');
+  const wrap = document.getElementById('my-avatar-btn').closest('.avatar-picker-wrap');
+  if(pop && wrap && !wrap.contains(e.target)) pop.style.display = 'none';
+});
+
 /* ---------- who-select setup ---------- */
 (function initWhoSelect(){
   const sel = document.getElementById('who-select');
@@ -391,6 +483,7 @@ function initials(name){ return (name||'').split(' ').filter(Boolean).slice(0,2)
   if(saved && FRIENDS.includes(saved)) sel.value = saved;
   sel.addEventListener('change', ()=>{
     localStorage.setItem('imdboys-who', sel.value);
+    updateMyAvatarBtn();
     if(document.getElementById('screen-my-reviews').classList.contains('active')) loadMyReviews();
   });
 })();
@@ -424,11 +517,59 @@ async function deleteReview(key, name){
   await ref.update({ [`entries.${name}`]: firebase.firestore.FieldValue.delete() });
 }
 
+/* Each person can react to a given review with at most ONE of like/heart/wow.
+   Clicking the same reaction again removes it; clicking another switches it. */
+async function toggleReaction(key, reviewerName, type){
+  const ref = db.collection('reviews').doc(key);
+  const doc = await ref.get();
+  if(!doc.exists) return;
+  const data = doc.data();
+  if(!data.entries || !data.entries[reviewerName]) return;
+  if(!data.entries[reviewerName].reactions) data.entries[reviewerName].reactions = {};
+  const me = currentUser();
+  if(data.entries[reviewerName].reactions[me] === type){
+    delete data.entries[reviewerName].reactions[me];
+  } else {
+    data.entries[reviewerName].reactions[me] = type;
+  }
+  await ref.set(data);
+}
+
+const REACTION_TYPES = [
+  { type: 'like', emoji: '👍' },
+  { type: 'heart', emoji: '❤️' },
+  { type: 'wow', emoji: '😮' }
+];
+
+function reactionsHtml(reviewerName, reactions){
+  reactions = reactions || {};
+  const me = currentUser();
+  const counts = { like: 0, heart: 0, wow: 0 };
+  Object.values(reactions).forEach(t => { if(counts[t] !== undefined) counts[t]++; });
+  const mine = reactions[me];
+  return `<div class="reactions" data-reviewer="${esc(reviewerName)}">${REACTION_TYPES.map(r => `
+    <button class="reactbtn${mine===r.type?' active':''}" data-type="${r.type}">${r.emoji}${counts[r.type] ? ` <span class="rcount">${counts[r.type]}</span>` : ''}</button>
+  `).join('')}</div>`;
+}
+
+function wireReactions(container, key, onDone){
+  container.querySelectorAll('.reactions').forEach(box=>{
+    const reviewerName = box.dataset.reviewer;
+    box.querySelectorAll('.reactbtn').forEach(btn=>{
+      btn.onclick = async (e)=>{
+        e.stopPropagation();
+        await toggleReaction(key, reviewerName, btn.dataset.type);
+        onDone();
+      };
+    });
+  });
+}
+
 /* =========================================================================
    TMDb search & detail
    ========================================================================= */
 async function searchMovies(query){
-  const url = `https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(query)}&include_adult=false&language=da-DK&page=1`;
+  const url = `https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(query)}&include_adult=false&language=en-US&page=1`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${TMDB_TOKEN}`, accept: 'application/json' } });
   if(!res.ok) throw new Error('TMDb search failed: ' + res.status);
   const data = await res.json();
@@ -444,7 +585,7 @@ async function searchMovies(query){
 }
 
 async function fetchMovieDetail(tmdbId){
-  const url = `https://api.themoviedb.org/3/movie/${tmdbId}?language=da-DK&append_to_response=credits`;
+  const url = `https://api.themoviedb.org/3/movie/${tmdbId}?language=en-US&append_to_response=credits`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${TMDB_TOKEN}`, accept: 'application/json' } });
   if(!res.ok) return null;
   const m = await res.json();
@@ -566,6 +707,8 @@ async function openMovie(m){
 }
 
 function renderDetail(m, key, reviewData){
+  state.lastKey = key;
+  state.lastReviewData = reviewData;
   const entries = reviewData.entries || {};
   const names = Object.keys(entries);
   const avg = names.length ? (names.reduce((s,n)=>s+entries[n].score,0)/names.length).toFixed(1) : null;
@@ -643,13 +786,14 @@ function renderDetail(m, key, reviewData){
     <div class="friendlist review-grid" id="friendlist">
       ${names.length ? names.map(n=>`
         <div class="friendrow">
-          <div class="avatar-circle">${esc(initials(n))}</div>
+          ${avatarHtml(n)}
           <div class="rowbody">
             <div class="rowtop">
               <div class="name name-link" data-profilename="${esc(n)}">${esc(n)}</div>
               <div class="score">${entries[n].score}/10</div>
             </div>
             ${entries[n].comment ? `<div class="comment">${esc(entries[n].comment)}</div>` : ''}
+            ${reactionsHtml(n, entries[n].reactions)}
           </div>
         </div>`).join('') : '<div class="empty">Ingen har anmeldt den her endnu &mdash; vær den første.</div>'}
     </div>
@@ -664,6 +808,10 @@ function renderDetail(m, key, reviewData){
 
   el.querySelectorAll('[data-profilename]').forEach(nameEl=>{
     nameEl.onclick = (e)=>{ e.stopPropagation(); openProfile(nameEl.dataset.profilename); };
+  });
+  wireReactions(el, key, async ()=>{
+    const updated = await getReview(key);
+    renderDetail(m, key, updated);
   });
 
   let selected = mine ? mine.score : null;
@@ -721,22 +869,37 @@ async function loadRecentReviews(){
   rows.sort((a,b)=> new Date(b.date) - new Date(a.date));
   if(!rows.length){ el.innerHTML = '<div class="empty">Ingen anmeldelser endnu &mdash; find en film og bliv den første.</div>'; return; }
   el.innerHTML = rows.slice(0,10).map(r=>`
-    <div class="friendrow" style="cursor:pointer;" data-key="${esc(r.key)}">
-      <div>
-        <div class="name"><span class="name-link" data-profilename="${esc(r.name)}">${esc(r.name)}</span> &middot; <span style="color:var(--muted);font-weight:400;">${esc(r.title)}</span></div>
+    <div class="friendrow" data-key="${esc(r.key)}">
+      ${avatarHtml(r.name)}
+      <div class="rowbody" style="cursor:pointer;">
+        <div class="rowtop">
+          <div class="name"><span class="name-link" data-profilename="${esc(r.name)}">${esc(r.name)}</span> &middot; <span style="color:var(--muted);font-weight:400;">${esc(r.title)}</span></div>
+          <div class="score">${r.score}/10</div>
+        </div>
         ${r.comment ? `<div class="comment">${esc(r.comment)}</div>` : ''}
+        ${reactionsHtml(r.name, r.reactions)}
       </div>
-      <div class="score">${r.score}/10</div>
     </div>
   `).join('');
   el.querySelectorAll('[data-profilename]').forEach(nameEl=>{
     nameEl.onclick = (e)=>{ e.stopPropagation(); openProfile(nameEl.dataset.profilename); };
   });
-  el.querySelectorAll('[data-key]').forEach(row=>{
-    row.onclick = ()=>{
+  el.querySelectorAll('.friendrow[data-key]').forEach(row=>{
+    row.querySelector('.rowbody').onclick = ()=>{
       const r = rows.find(x=>x.key===row.dataset.key);
       openMovie({ tmdb_id: r.key.replace('tmdb-',''), title:r.title, year:r.year, poster_path:r.poster_path, overview:r.overview });
     };
+  });
+  el.querySelectorAll('.reactions').forEach(box=>{
+    const reviewerRow = box.closest('[data-key]');
+    if(!reviewerRow) return;
+    box.querySelectorAll('.reactbtn').forEach(btn=>{
+      btn.onclick = async (e)=>{
+        e.stopPropagation();
+        await toggleReaction(reviewerRow.dataset.key, box.dataset.reviewer, btn.dataset.type);
+        loadRecentReviews();
+      };
+    });
   });
 }
 
@@ -815,6 +978,8 @@ document.getElementById('logo-home').onclick = ()=>{ showScreen('screen-main'); 
 document.getElementById('tab-main').onclick = ()=>{ showScreen('screen-main'); loadRecentReviews(); };
 document.getElementById('tab-mine').onclick = ()=>{ showScreen('screen-my-reviews'); loadMyReviews(); };
 document.getElementById('tab-stats').onclick = ()=>{ showScreen('screen-stats'); loadStats(); };
+document.getElementById('mine-back-btn').onclick = ()=>{ showScreen('screen-main'); loadRecentReviews(); };
+document.getElementById('stats-back-btn').onclick = ()=>{ showScreen('screen-main'); loadRecentReviews(); };
 document.getElementById('mine-sort').onchange = ()=> loadMyReviews();
 document.getElementById('profile-sort').onchange = ()=> loadProfileView(state.viewingProfile);
 document.getElementById('profile-back-btn').onclick = ()=> showScreen('screen-main');
@@ -1017,7 +1182,10 @@ function renderAllCharts(stats){
 }
 
 /* ---------- init ---------- */
-if(db) loadRecentReviews();
+if(db){
+  loadProfiles().then(updateMyAvatarBtn);
+  loadRecentReviews();
+}
 </script>
 </body>
 </html>
