@@ -593,15 +593,17 @@ async function searchMovies(query){
   return results;
 }
 
+const TMDB_HEADERS = { Authorization: `Bearer ${TMDB_TOKEN}`, accept: 'application/json' };
+
 async function fetchMovieDetail(tmdbId){
-  const url = `https://api.themoviedb.org/3/movie/${tmdbId}?language=en-US&append_to_response=credits,similar`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${TMDB_TOKEN}`, accept: 'application/json' } });
+  const url = `https://api.themoviedb.org/3/movie/${tmdbId}?language=en-US&append_to_response=credits`;
+  const res = await fetch(url, { headers: TMDB_HEADERS });
   if(!res.ok) return null;
   const m = await res.json();
   const crew = (m.credits && m.credits.crew) || [];
   const cast = (m.credits && m.credits.cast) || [];
+  const directorObj = crew.find(c => c.job === 'Director');
   const directors = crew.filter(c => c.job === 'Director').map(c => c.name);
-  const similar = (m.similar && m.similar.results) || [];
   return {
     tmdb_id: m.id,
     title: m.title,
@@ -614,13 +616,52 @@ async function fetchMovieDetail(tmdbId){
     vote_average: m.vote_average || 0,
     vote_count: m.vote_count || 0,
     genres: (m.genres || []).map(g => g.name),
+    genre_ids: (m.genres || []).map(g => g.id),
     director: directors.join(', '),
+    director_id: directorObj ? directorObj.id : null,
     companies: (m.production_companies || []).slice(0,2).map(c => c.name),
-    cast: cast.slice(0,6).map(c => ({ name: c.name, character: c.character, profile_path: c.profile_path || '' })),
-    similar: similar.slice(0,5).map(s => ({
-      tmdb_id: s.id, title: s.title, year: (s.release_date||'').slice(0,4), poster_path: s.poster_path || ''
-    }))
+    cast: cast.slice(0,6).map(c => ({ name: c.name, character: c.character, profile_path: c.profile_path || '' }))
   };
+}
+
+/* Builds a more relevant "similar films" list than TMDb's own /similar endpoint:
+   prioritises other films by the same director, then fills remaining slots
+   with films sharing genres and a nearby release period. */
+async function fetchRelatedMovies(movie){
+  const excludeId = movie.tmdb_id;
+  const jobs = [];
+
+  if(movie.director_id){
+    jobs.push(
+      fetch(`https://api.themoviedb.org/3/discover/movie?with_crew=${movie.director_id}&sort_by=vote_average.desc&vote_count.gte=20&language=en-US`, { headers: TMDB_HEADERS })
+        .then(r => r.ok ? r.json() : { results: [] }).then(d => d.results || []).catch(() => [])
+    );
+  } else {
+    jobs.push(Promise.resolve([]));
+  }
+
+  const genreIds = movie.genre_ids || [];
+  if(genreIds.length){
+    const genreParam = genreIds.slice(0,2).join(',');
+    const year = parseInt(movie.year, 10);
+    const dateParams = year ? `&primary_release_date.gte=${year-15}-01-01&primary_release_date.lte=${year+15}-12-31` : '';
+    jobs.push(
+      fetch(`https://api.themoviedb.org/3/discover/movie?with_genres=${genreParam}&sort_by=vote_average.desc&vote_count.gte=300${dateParams}&language=en-US`, { headers: TMDB_HEADERS })
+        .then(r => r.ok ? r.json() : { results: [] }).then(d => d.results || []).catch(() => [])
+    );
+  } else {
+    jobs.push(Promise.resolve([]));
+  }
+
+  const [byDirector, byGenre] = await Promise.all(jobs);
+  const seen = new Set([excludeId]);
+  const related = [];
+  [...byDirector, ...byGenre].forEach(r => {
+    if(seen.has(r.id)) return;
+    seen.add(r.id);
+    related.push({ tmdb_id: r.id, title: r.title, year: (r.release_date||'').slice(0,4), poster_path: r.poster_path || '' });
+  });
+  return related.slice(0,5);
 }
 
 /* ---------- search UI ---------- */
@@ -716,6 +757,7 @@ async function openMovie(m){
     getReview(key)
   ]);
   const full = detail || m;
+  full.similar = await fetchRelatedMovies(full).catch(()=>[]);
   renderDetail(full, key, review || { title: full.title, year: full.year, poster_path: full.poster_path, overview: full.overview, entries:{} });
 }
 
