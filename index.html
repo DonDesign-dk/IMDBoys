@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>IMDBoys</title>
+
+<!-- PWA: installable "app" support -->
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#0A0A0C">
+<link rel="icon" href="./icons/favicon-32.png" type="image/png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="IMDBoys">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -585,13 +594,14 @@ async function searchMovies(query){
 }
 
 async function fetchMovieDetail(tmdbId){
-  const url = `https://api.themoviedb.org/3/movie/${tmdbId}?language=en-US&append_to_response=credits`;
+  const url = `https://api.themoviedb.org/3/movie/${tmdbId}?language=en-US&append_to_response=credits,similar`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${TMDB_TOKEN}`, accept: 'application/json' } });
   if(!res.ok) return null;
   const m = await res.json();
   const crew = (m.credits && m.credits.crew) || [];
   const cast = (m.credits && m.credits.cast) || [];
   const directors = crew.filter(c => c.job === 'Director').map(c => c.name);
+  const similar = (m.similar && m.similar.results) || [];
   return {
     tmdb_id: m.id,
     title: m.title,
@@ -606,7 +616,10 @@ async function fetchMovieDetail(tmdbId){
     genres: (m.genres || []).map(g => g.name),
     director: directors.join(', '),
     companies: (m.production_companies || []).slice(0,2).map(c => c.name),
-    cast: cast.slice(0,6).map(c => ({ name: c.name, character: c.character, profile_path: c.profile_path || '' }))
+    cast: cast.slice(0,6).map(c => ({ name: c.name, character: c.character, profile_path: c.profile_path || '' })),
+    similar: similar.slice(0,5).map(s => ({
+      tmdb_id: s.id, title: s.title, year: (s.release_date||'').slice(0,4), poster_path: s.poster_path || ''
+    }))
   };
 }
 
@@ -804,7 +817,26 @@ function renderDetail(m, key, reviewData){
         ${genres[0] ? `<div class="kicker">${esc(genres[0])}</div>` : ''}
         <p>${esc(overview)}</p>
       </div>` : ''}
+
+    ${(m.similar && m.similar.length) ? `
+      <div class="section-title">Lignende film</div>
+      <div class="grid">
+        ${m.similar.map(s => {
+          const sUrl = posterUrl(s.poster_path);
+          const imgHtml = sUrl
+            ? `<img src="${sUrl}" alt="${esc(s.title)}" onerror="this.outerHTML='<div class=&quot;noposter&quot;>Intet cover</div>'">`
+            : `<div class="noposter">Intet cover</div>`;
+          return `<div class="card" data-similar-id="${s.tmdb_id}">${imgHtml}<div class="meta"><h4>${esc(s.title)}</h4><div class="year">${esc(s.year) || '—'}</div></div></div>`;
+        }).join('')}
+      </div>` : ''}
   `;
+
+  el.querySelectorAll('[data-similar-id]').forEach(card=>{
+    card.onclick = ()=>{
+      const s = m.similar.find(x => String(x.tmdb_id) === card.dataset.similarId);
+      openMovie(s || { tmdb_id: card.dataset.similarId });
+    };
+  });
 
   el.querySelectorAll('[data-profilename]').forEach(nameEl=>{
     nameEl.onclick = (e)=>{ e.stopPropagation(); openProfile(nameEl.dataset.profilename); };
@@ -1185,6 +1217,12 @@ function renderAllCharts(stats){
 if(db){
   loadProfiles().then(updateMyAvatarBtn);
   loadRecentReviews();
+}
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./sw.js').catch(err => console.error('SW registration failed:', err));
+  });
 }
 </script>
 </body>
