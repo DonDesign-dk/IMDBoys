@@ -149,6 +149,12 @@
   .tagline{color:var(--muted);font-style:italic;font-size:14px;margin-bottom:6px;}
   .genre-pills{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 18px;}
   .genre-pill{background:var(--panel-2);border:1px solid var(--border);border-radius:20px;padding:5px 13px;font-size:12px;color:var(--text);}
+  .trailer-link{
+    display:inline-flex;align-items:center;gap:6px;text-decoration:none;
+    background:var(--panel-2);border:1px solid var(--border);border-radius:20px;
+    padding:6px 14px;font-size:12px;font-weight:600;color:var(--accent);margin-top:2px;
+  }
+  .trailer-link:hover{border-color:var(--accent);background:var(--accent-dim);}
   .hero-actions{margin-top:4px;}
 
   /* ---------- rate form ---------- */
@@ -600,7 +606,7 @@ async function searchMovies(query){
 const TMDB_HEADERS = { Authorization: `Bearer ${TMDB_TOKEN}`, accept: 'application/json' };
 
 async function fetchMovieDetail(tmdbId){
-  const url = `https://api.themoviedb.org/3/movie/${tmdbId}?language=en-US&append_to_response=credits`;
+  const url = `https://api.themoviedb.org/3/movie/${tmdbId}?language=en-US&append_to_response=credits,videos`;
   const res = await fetch(url, { headers: TMDB_HEADERS });
   if(!res.ok) return null;
   const m = await res.json();
@@ -608,6 +614,11 @@ async function fetchMovieDetail(tmdbId){
   const cast = (m.credits && m.credits.cast) || [];
   const directorObj = crew.find(c => c.job === 'Director');
   const directors = crew.filter(c => c.job === 'Director').map(c => c.name);
+
+  const videos = (m.videos && m.videos.results) || [];
+  const trailers = videos.filter(v => v.site === 'YouTube' && v.type === 'Trailer');
+  const bestTrailer = trailers.find(v => v.official) || trailers[0] || videos.find(v => v.site === 'YouTube');
+
   return {
     tmdb_id: m.id,
     title: m.title,
@@ -624,7 +635,8 @@ async function fetchMovieDetail(tmdbId){
     director: directors.join(', '),
     director_id: directorObj ? directorObj.id : null,
     companies: (m.production_companies || []).slice(0,2).map(c => c.name),
-    cast: cast.slice(0,6).map(c => ({ name: c.name, character: c.character, profile_path: c.profile_path || '' }))
+    cast: cast.slice(0,6).map(c => ({ name: c.name, character: c.character, profile_path: c.profile_path || '' })),
+    trailer_key: bestTrailer ? bestTrailer.key : ''
   };
 }
 
@@ -751,7 +763,7 @@ function renderResults(movies){
 }
 
 /* ---------- detail screen ---------- */
-async function openMovie(m){
+async function openMovieInternal(m){
   state.currentMovie = m;
   showScreen('screen-detail');
   document.getElementById('detail-content').innerHTML = '<div class="loading">Henter filminfo...</div>';
@@ -763,6 +775,11 @@ async function openMovie(m){
   const full = detail || m;
   full.similar = await fetchRelatedMovies(full).catch(()=>[]);
   renderDetail(full, key, review || { title: full.title, year: full.year, poster_path: full.poster_path, overview: full.overview, entries:{} });
+}
+
+async function openMovie(m){
+  await openMovieInternal(m);
+  pushNav('screen-detail', { tmdb_id: m.tmdb_id, title: m.title, year: m.year, poster_path: m.poster_path, overview: m.overview });
 }
 
 function renderDetail(m, key, reviewData){
@@ -809,6 +826,7 @@ function renderDetail(m, key, reviewData){
           </div>
           ${m.tagline ? `<div class="tagline">${esc(m.tagline)}</div>` : ''}
           <div class="genre-pills">${genres.map(g=>`<span class="genre-pill">${esc(g)}</span>`).join('')}</div>
+          ${m.trailer_key ? `<a class="trailer-link" href="https://www.youtube.com/watch?v=${esc(m.trailer_key)}" target="_blank" rel="noopener">&#9654; Se trailer</a>` : ''}
         </div>
       </div>
     </div>
@@ -828,18 +846,6 @@ function renderDetail(m, key, reviewData){
       <div class="badge">${names.length} anmeldelse${names.length===1?'':'r'}</div>
       ${m.vote_average ? `<div class="badge">TMDb <b>${m.vote_average.toFixed(1)}</b> (${m.vote_count})</div>` : ''}
     </div>
-
-    ${castItems.length ? `
-      <div class="section-title">Medvirkende</div>
-      <div class="cast-grid">
-        ${castItems.map(c => {
-          const pUrl = profileUrl(c.profile_path, 'w185');
-          const imgHtml = pUrl
-            ? `<img src="${pUrl}" alt="" onerror="this.outerHTML='<div class=&quot;cast-fallback&quot;>${esc(initials(c.name))}</div>'">`
-            : `<div class="cast-fallback">${esc(initials(c.name))}</div>`;
-          return `<div class="cast-item">${imgHtml}<div class="cname">${esc(c.name)}</div><div class="crole">${esc(c.role||'')}</div></div>`;
-        }).join('')}
-      </div>` : ''}
 
     <div class="section-title">Gruppens anmeldelser</div>
     <div class="friendlist review-grid" id="friendlist">
@@ -862,6 +868,18 @@ function renderDetail(m, key, reviewData){
       <div class="storybox">
         ${genres[0] ? `<div class="kicker">${esc(genres[0])}</div>` : ''}
         <p>${esc(overview)}</p>
+      </div>` : ''}
+
+    ${castItems.length ? `
+      <div class="section-title">Medvirkende</div>
+      <div class="cast-grid">
+        ${castItems.map(c => {
+          const pUrl = profileUrl(c.profile_path, 'w185');
+          const imgHtml = pUrl
+            ? `<img src="${pUrl}" alt="" onerror="this.outerHTML='<div class=&quot;cast-fallback&quot;>${esc(initials(c.name))}</div>'">`
+            : `<div class="cast-fallback">${esc(initials(c.name))}</div>`;
+          return `<div class="cast-item">${imgHtml}<div class="cname">${esc(c.name)}</div><div class="crole">${esc(c.role||'')}</div></div>`;
+        }).join('')}
       </div>` : ''}
 
     ${(m.similar && m.similar.length) ? `
@@ -932,7 +950,6 @@ function renderDetail(m, key, reviewData){
   }
 }
 
-document.getElementById('back-btn').onclick = ()=> showScreen('screen-main');
 
 /* ---------- recent reviews (home screen) ---------- */
 async function loadRecentReviews(){
@@ -1066,12 +1083,17 @@ function loadReviewsScreen(){
   if(state.reviewsMode === 'all') loadAllReviews(); else loadMyReviews();
 }
 
-async function openProfile(name){
+async function openProfileInternal(name){
   state.viewingProfile = name;
   document.getElementById('profile-view-name').textContent = name;
   document.getElementById('profile-sort').value = 'date';
   showScreen('screen-profile-view');
   await loadProfileView(name);
+}
+
+async function openProfile(name){
+  await openProfileInternal(name);
+  pushNav('screen-profile-view', { name });
 }
 
 async function loadProfileView(name){
@@ -1082,28 +1104,99 @@ async function loadProfileView(name){
     `${esc(name)} har ikke anmeldt noget endnu.`);
 }
 
+/* ---------- browser history (back button + iOS swipe-back support) ---------- */
+let navDepth = 0;
+let suppressPush = false;
+
+function pushNav(screenId, params){
+  params = params || {};
+  if(suppressPush) return;
+  const current = history.state;
+  if(current && current.screenId === screenId && JSON.stringify(current.params) === JSON.stringify(params)) return;
+  history.pushState({ screenId, params }, '', location.href);
+  navDepth++;
+}
+
+function goBack(){
+  if(navDepth > 0){
+    history.back();
+  } else {
+    showScreen('screen-main');
+    loadRecentReviews();
+  }
+}
+
+function renderFromHistoryState(st){
+  st = st || { screenId: 'screen-main', params: {} };
+  const p = st.params || {};
+  switch(st.screenId){
+    case 'screen-my-reviews':
+      state.reviewsMode = p.mode || 'mine';
+      updateReviewsToggleUI();
+      showScreen('screen-my-reviews');
+      loadReviewsScreen();
+      break;
+    case 'screen-profile-view':
+      openProfileInternal(p.name);
+      break;
+    case 'screen-stats':
+      showScreen('screen-stats');
+      loadStats();
+      break;
+    case 'screen-detail':
+      openMovieInternal({ tmdb_id: p.tmdb_id, title: p.title, year: p.year, poster_path: p.poster_path, overview: p.overview });
+      break;
+    default:
+      showScreen('screen-main');
+      loadRecentReviews();
+  }
+}
+
+window.addEventListener('popstate', (e)=>{
+  navDepth = Math.max(0, navDepth - 1);
+  suppressPush = true;
+  renderFromHistoryState(e.state);
+  suppressPush = false;
+});
+
 /* ---------- nav wiring ---------- */
-document.getElementById('logo-home').onclick = ()=>{ showScreen('screen-main'); loadRecentReviews(); };
-document.getElementById('tab-main').onclick = ()=>{ showScreen('screen-main'); loadRecentReviews(); };
+document.getElementById('logo-home').onclick = ()=>{
+  showScreen('screen-main'); loadRecentReviews(); pushNav('screen-main');
+};
+document.getElementById('tab-main').onclick = ()=>{
+  showScreen('screen-main'); loadRecentReviews(); pushNav('screen-main');
+};
 document.getElementById('tab-mine').onclick = ()=>{
   state.reviewsMode = 'mine';
   updateReviewsToggleUI();
   showScreen('screen-my-reviews');
   loadMyReviews();
+  pushNav('screen-my-reviews', { mode: 'mine' });
 };
-document.getElementById('tab-stats').onclick = ()=>{ showScreen('screen-stats'); loadStats(); };
-document.getElementById('mine-back-btn').onclick = ()=>{ showScreen('screen-main'); loadRecentReviews(); };
-document.getElementById('stats-back-btn').onclick = ()=>{ showScreen('screen-main'); loadRecentReviews(); };
+document.getElementById('tab-stats').onclick = ()=>{
+  showScreen('screen-stats'); loadStats(); pushNav('screen-stats');
+};
+document.getElementById('mine-back-btn').onclick = goBack;
+document.getElementById('stats-back-btn').onclick = goBack;
 document.getElementById('mine-sort').onchange = ()=> loadReviewsScreen();
 document.getElementById('profile-sort').onchange = ()=> loadProfileView(state.viewingProfile);
-document.getElementById('profile-back-btn').onclick = ()=> showScreen('screen-main');
+document.getElementById('profile-back-btn').onclick = goBack;
+document.getElementById('back-btn').onclick = goBack;
 
 function updateReviewsToggleUI(){
   document.getElementById('mine-toggle-mine').classList.toggle('active', state.reviewsMode === 'mine');
   document.getElementById('mine-toggle-all').classList.toggle('active', state.reviewsMode === 'all');
 }
-document.getElementById('mine-toggle-mine').onclick = ()=>{ state.reviewsMode = 'mine'; updateReviewsToggleUI(); loadMyReviews(); };
-document.getElementById('mine-toggle-all').onclick = ()=>{ state.reviewsMode = 'all'; updateReviewsToggleUI(); loadAllReviews(); };
+document.getElementById('mine-toggle-mine').onclick = ()=>{
+  state.reviewsMode = 'mine'; updateReviewsToggleUI(); loadMyReviews();
+  pushNav('screen-my-reviews', { mode: 'mine' });
+};
+document.getElementById('mine-toggle-all').onclick = ()=>{
+  state.reviewsMode = 'all'; updateReviewsToggleUI(); loadAllReviews();
+  pushNav('screen-my-reviews', { mode: 'all' });
+};
+
+history.replaceState({ screenId: 'screen-main', params: {} }, '', location.href);
 
 
 /* =========================================================================
