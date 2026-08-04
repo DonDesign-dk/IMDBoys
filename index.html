@@ -267,7 +267,7 @@
 
 <div class="topbar">
   <div class="logo" id="logo-home">IMDBoys</div>
-  <div class="navtabs">
+  <div class="navtabs" id="top-navtabs">
     <button class="navbtn" id="tab-main" data-screen="screen-main">Film</button>
     <button class="navbtn" id="tab-mine" data-screen="screen-my-reviews">Anmeldelser</button>
     <button class="navbtn" id="tab-stats" data-screen="screen-stats">Statistik</button>
@@ -418,7 +418,7 @@ function esc(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  document.querySelectorAll('.navbtn').forEach(b=> b.classList.toggle('active', b.dataset.screen === id));
+  document.querySelectorAll('#top-navtabs .navbtn').forEach(b=> b.classList.toggle('active', b.dataset.screen === id));
 }
 function currentUser(){ return document.getElementById('who-select').value; }
 function posterUrl(path, size){ return path ? `https://image.tmdb.org/t/p/${size||'w342'}${path}` : ''; }
