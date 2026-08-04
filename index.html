@@ -269,7 +269,7 @@
   <div class="logo" id="logo-home">IMDBoys</div>
   <div class="navtabs">
     <button class="navbtn" id="tab-main" data-screen="screen-main">Film</button>
-    <button class="navbtn" id="tab-mine" data-screen="screen-my-reviews">Mine anmeldelser</button>
+    <button class="navbtn" id="tab-mine" data-screen="screen-my-reviews">Anmeldelser</button>
     <button class="navbtn" id="tab-stats" data-screen="screen-stats">Statistik</button>
   </div>
   <div class="whoami">
@@ -302,6 +302,10 @@
   <div class="screen" id="screen-my-reviews">
     <button class="backbtn" id="mine-back-btn">&larr; Tilbage</button>
     <div class="profile-header"><h2 id="mine-title">Mine anmeldelser</h2><span class="count" id="mine-count"></span></div>
+    <div class="navtabs" style="margin-bottom:20px;">
+      <button class="navbtn active" id="mine-toggle-mine" data-mode="mine">Mine anmeldelser</button>
+      <button class="navbtn" id="mine-toggle-all" data-mode="all">Alle anmeldelser</button>
+    </div>
     <div class="sortrow">
       <label for="mine-sort">Sortér</label>
       <select class="sortselect" id="mine-sort">
@@ -406,7 +410,7 @@ try{
 }
 
 /* ---------- state & small helpers ---------- */
-const state = { currentMovie:null, viewingProfile:null, lastKey:null, lastReviewData:null };
+const state = { currentMovie:null, viewingProfile:null, lastKey:null, lastReviewData:null, reviewsMode:'mine' };
 const AVATAR_OPTIONS = ['🎬','🍿','👽','🐉','🤖','🧛','🦸','🐙','🎃','⚡','🥷','🦖'];
 let PROFILES = {};
 
@@ -493,7 +497,7 @@ document.addEventListener('click', (e)=>{
   sel.addEventListener('change', ()=>{
     localStorage.setItem('imdboys-who', sel.value);
     updateMyAvatarBtn();
-    if(document.getElementById('screen-my-reviews').classList.contains('active')) loadMyReviews();
+    if(document.getElementById('screen-my-reviews').classList.contains('active')) loadReviewsScreen();
   });
 })();
 
@@ -1031,6 +1035,37 @@ async function loadMyReviews(){
     'Ingen anmeldelser endnu &mdash; find en film under "Film".');
 }
 
+async function allReviewedMoviesRows(){
+  const all = await getAllReviews();
+  const rows = [];
+  for(const [key, movie] of Object.entries(all)){
+    const entries = movie.entries || {};
+    const names = Object.keys(entries);
+    if(!names.length) continue;
+    const scores = names.map(n => entries[n].score);
+    const avg = scores.reduce((a,b)=>a+b, 0) / scores.length;
+    const latestDate = names.map(n => entries[n].date).sort().slice(-1)[0];
+    rows.push({
+      key, title: movie.title, year: movie.year, poster_path: movie.poster_path,
+      score: Math.round(avg*10)/10, date: latestDate,
+      comment: `${names.length} anmeldelse${names.length===1?'':'r'}`
+    });
+  }
+  return rows;
+}
+
+async function loadAllReviews(){
+  document.getElementById('mine-title').textContent = 'Alle anmeldelser';
+  const mode = document.getElementById('mine-sort').value;
+  const rows = sortReviewRows(await allReviewedMoviesRows(), mode);
+  renderReviewGrid(document.getElementById('mine-grid'), document.getElementById('mine-count'), rows,
+    'Ingen anmeldelser endnu &mdash; find en film under "Film".');
+}
+
+function loadReviewsScreen(){
+  if(state.reviewsMode === 'all') loadAllReviews(); else loadMyReviews();
+}
+
 async function openProfile(name){
   state.viewingProfile = name;
   document.getElementById('profile-view-name').textContent = name;
@@ -1050,13 +1085,26 @@ async function loadProfileView(name){
 /* ---------- nav wiring ---------- */
 document.getElementById('logo-home').onclick = ()=>{ showScreen('screen-main'); loadRecentReviews(); };
 document.getElementById('tab-main').onclick = ()=>{ showScreen('screen-main'); loadRecentReviews(); };
-document.getElementById('tab-mine').onclick = ()=>{ showScreen('screen-my-reviews'); loadMyReviews(); };
+document.getElementById('tab-mine').onclick = ()=>{
+  state.reviewsMode = 'mine';
+  updateReviewsToggleUI();
+  showScreen('screen-my-reviews');
+  loadMyReviews();
+};
 document.getElementById('tab-stats').onclick = ()=>{ showScreen('screen-stats'); loadStats(); };
 document.getElementById('mine-back-btn').onclick = ()=>{ showScreen('screen-main'); loadRecentReviews(); };
 document.getElementById('stats-back-btn').onclick = ()=>{ showScreen('screen-main'); loadRecentReviews(); };
-document.getElementById('mine-sort').onchange = ()=> loadMyReviews();
+document.getElementById('mine-sort').onchange = ()=> loadReviewsScreen();
 document.getElementById('profile-sort').onchange = ()=> loadProfileView(state.viewingProfile);
 document.getElementById('profile-back-btn').onclick = ()=> showScreen('screen-main');
+
+function updateReviewsToggleUI(){
+  document.getElementById('mine-toggle-mine').classList.toggle('active', state.reviewsMode === 'mine');
+  document.getElementById('mine-toggle-all').classList.toggle('active', state.reviewsMode === 'all');
+}
+document.getElementById('mine-toggle-mine').onclick = ()=>{ state.reviewsMode = 'mine'; updateReviewsToggleUI(); loadMyReviews(); };
+document.getElementById('mine-toggle-all').onclick = ()=>{ state.reviewsMode = 'all'; updateReviewsToggleUI(); loadAllReviews(); };
+
 
 /* =========================================================================
    Statistics
