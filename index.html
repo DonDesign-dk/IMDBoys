@@ -826,7 +826,7 @@ function renderDetail(m, key, reviewData){
           </div>
           ${m.tagline ? `<div class="tagline">${esc(m.tagline)}</div>` : ''}
           <div class="genre-pills">${genres.map(g=>`<span class="genre-pill">${esc(g)}</span>`).join('')}</div>
-          ${m.trailer_key ? `<a class="trailer-link" href="https://www.youtube.com/watch?v=${esc(m.trailer_key)}" target="_blank" rel="noopener">&#9654; Se trailer</a>` : ''}
+          ${m.trailer_key ? `<a class="trailer-link" href="https://www.youtube.com/watch?v=${esc(m.trailer_key)}" target="_blank" rel="noopener">Se trailer</a>` : ''}
         </div>
       </div>
     </div>
