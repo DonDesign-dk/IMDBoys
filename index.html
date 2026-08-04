@@ -208,6 +208,7 @@
   .friendrow .rowbody{flex:1;min-width:0;}
   .friendrow .rowtop{display:flex;justify-content:space-between;align-items:center;gap:8px;}
   .friendrow .name{font-weight:600;font-size:14px;}
+  .review-date{color:var(--muted);font-size:11px;font-weight:400;margin-left:5px;}
   .name-link{cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s;}
   .name-link:hover{color:var(--accent);text-decoration-color:var(--accent);}
   .friendrow .comment{color:var(--muted);font-size:13px;margin-top:5px;line-height:1.5;}
@@ -432,6 +433,14 @@ function backdropUrl(path, size){ return path ? `https://image.tmdb.org/t/p/${si
 function profileUrl(path, size){ return path ? `https://image.tmdb.org/t/p/${size||'w185'}${path}` : ''; }
 function movieKey(tmdbId){ return `tmdb-${tmdbId}`; }
 function initials(name){ return (name||'').split(' ').filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join(''); }
+function formatReviewDate(isoStr){
+  const d = new Date(isoStr);
+  if(!isoStr || isNaN(d)) return '';
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}.${mm}.${yy}`;
+}
 
 function avatarHtml(name, sizeClass){
   const p = PROFILES[name];
@@ -854,7 +863,9 @@ function renderDetail(m, key, reviewData){
           ${avatarHtml(n)}
           <div class="rowbody">
             <div class="rowtop">
-              <div class="name name-link" data-profilename="${esc(n)}">${esc(n)}</div>
+              <div style="display:flex;align-items:baseline;">
+                <div class="name name-link" data-profilename="${esc(n)}">${esc(n)}</div><span class="review-date">(Anmeldt: ${formatReviewDate(entries[n].date)})</span>
+              </div>
               <div class="score">${entries[n].score}/10</div>
             </div>
             ${entries[n].comment ? `<div class="comment">${esc(entries[n].comment)}</div>` : ''}
@@ -968,7 +979,7 @@ async function loadRecentReviews(){
       ${avatarHtml(r.name)}
       <div class="rowbody" style="cursor:pointer;">
         <div class="rowtop">
-          <div class="name"><span class="name-link" data-profilename="${esc(r.name)}">${esc(r.name)}</span> &middot; <span style="color:var(--muted);font-weight:400;">${esc(r.title)}</span></div>
+          <div class="name"><span class="name-link" data-profilename="${esc(r.name)}">${esc(r.name)}</span><span class="review-date">(Anmeldt: ${formatReviewDate(r.date)})</span> &middot; <span style="color:var(--muted);font-weight:400;">${esc(r.title)}</span></div>
           <div class="score">${r.score}/10</div>
         </div>
         ${r.comment ? `<div class="comment">${esc(r.comment)}</div>` : ''}
