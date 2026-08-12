@@ -42,13 +42,15 @@
 
   /* ---------- top nav ---------- */
   .topbar{
-    position:sticky;top:0;z-index:30;display:flex;align-items:center;justify-content:space-between;
-    padding:16px 24px;gap:14px;flex-wrap:wrap;background:rgba(10,10,12,0.85);backdrop-filter:blur(10px);
+    position:sticky;top:0;z-index:30;
+    padding:calc(16px + env(safe-area-inset-top)) 24px 0;
+    background:rgba(10,10,12,0.85);backdrop-filter:blur(10px);
     border-bottom:1px solid var(--border);
   }
-  .logo{display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:800;font-size:21px;letter-spacing:.2px;}
+  .topbar-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding-bottom:14px;}
+  .logo{display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:800;font-size:21px;letter-spacing:.2px;flex-shrink:0;}
   .logo .mark{color:var(--accent);}
-  .whoami{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);}
+  .whoami{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);flex-shrink:0;}
   select.whoselect{
     padding:7px 12px;border-radius:20px;border:1px solid var(--border);background:var(--panel);
     color:var(--text);font-weight:600;font-size:13px;font-family:inherit;outline:none;cursor:pointer;
@@ -70,16 +72,20 @@
     font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;
   }
   .avatar-option:hover, .avatar-option.selected{border-color:var(--accent);background:var(--accent-dim);}
-  .navtabs{display:flex;gap:6px;flex-wrap:wrap;}
+  .navtabs{
+    display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:14px;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;
+  }
+  .navtabs::-webkit-scrollbar{display:none;}
   .navbtn{
     background:transparent;border:1px solid transparent;color:var(--muted);border-radius:20px;
-    padding:7px 15px;font-size:13px;cursor:pointer;font-weight:600;transition:.15s;
+    padding:7px 15px;font-size:13px;cursor:pointer;font-weight:600;transition:.15s;flex-shrink:0;white-space:nowrap;
   }
   .navbtn:hover{color:var(--text);background:var(--panel);}
   .navbtn.active{background:var(--accent-dim);color:var(--accent);border-color:rgba(217,164,65,0.3);}
 
   .wrap{max-width:1080px;margin:0 auto;padding:28px 24px 90px;}
-  @media(max-width:480px){ .topbar{padding:14px 16px;} .wrap{padding:20px 16px 80px;} .searchbar{flex-wrap:nowrap;} }
+  @media(max-width:480px){ .topbar{padding:calc(14px + env(safe-area-inset-top)) 16px 0;} .wrap{padding:20px 16px 80px;} .searchbar{flex-wrap:nowrap;} }
   .screen{display:none;}
   .screen.active{display:block;}
 
@@ -297,8 +303,9 @@
     <div class="patchnotes-kicker">Nye tilføjelser</div>
     <ul>
       <li>Du kan nu søge og anmelde <b>serier</b> &mdash; ikke kun film.</li>
-      <li>Ny <b>Watchlist</b>: gem film/serier du vil se, og kig forbi dine venners.</li>
+      <li>Ny <b>Watchlist</b>: gem film/serier du vil se, og se dine venners watchlist.</li>
       <li>Vælg en <b>troldmand</b> (eller et af de andre nye ikoner) som dit profilbillede.</li>
+      <li>Har du appen på din hjemmeskærm? Slet den gamle genvej og tilføj den igen for at få det nye IMDBoys-ikon.</li>
     </ul>
     <button class="primary" id="patchnotes-close-btn">Forstået!</button>
   </div>
@@ -307,20 +314,22 @@
 <div id="app-root">
 
 <div class="topbar">
-  <div class="logo" id="logo-home">IMDBoys</div>
+  <div class="topbar-row">
+    <div class="logo" id="logo-home">IMDBoys</div>
+    <div class="whoami">
+      Jeg er
+      <select class="whoselect" id="who-select"></select>
+      <div class="avatar-picker-wrap">
+        <button class="avatar-btn" id="my-avatar-btn" title="Vælg profilbillede"></button>
+        <div class="avatar-popover" id="avatar-popover" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
   <div class="navtabs" id="top-navtabs">
     <button class="navbtn" id="tab-main" data-screen="screen-main">Film</button>
     <button class="navbtn" id="tab-mine" data-screen="screen-my-reviews">Anmeldelser</button>
     <button class="navbtn" id="tab-watchlist" data-screen="screen-watchlist">Watchlist</button>
     <button class="navbtn" id="tab-stats" data-screen="screen-stats">Statistik</button>
-  </div>
-  <div class="whoami">
-    Jeg er
-    <select class="whoselect" id="who-select"></select>
-    <div class="avatar-picker-wrap">
-      <button class="avatar-btn" id="my-avatar-btn" title="Vælg profilbillede"></button>
-      <div class="avatar-popover" id="avatar-popover" style="display:none;"></div>
-    </div>
   </div>
 </div>
 
@@ -1442,7 +1451,7 @@ document.getElementById('mine-toggle-all').onclick = ()=>{
 history.replaceState({ screenId: 'screen-main', params: {} }, '', location.href);
 
 /* ---------- patch notes (shown once per person, bump PATCH_NOTE_VERSION to show again) ---------- */
-const PATCH_NOTE_VERSION = 'v2';
+const PATCH_NOTE_VERSION = 'v3';
 if(localStorage.getItem('imdboys-seen-patch') !== PATCH_NOTE_VERSION){
   document.getElementById('patchnotes-overlay').style.display = 'flex';
 }
