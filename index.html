@@ -906,11 +906,24 @@ async function openMovieInternal(m){
   state.currentMovie = m;
   showScreen('screen-detail');
   document.getElementById('detail-content').innerHTML = '<div class="loading">Henter info...</div>';
-  const key = movieKey(mediaType, m.tmdb_id);
-  const [detail, review] = await Promise.all([
+  let key = movieKey(mediaType, m.tmdb_id);
+  const [detail, firstReview] = await Promise.all([
     fetchMovieDetail(mediaType, m.tmdb_id).catch(()=>null),
     getReview(key)
   ]);
+
+  // Backward compatibility: movies reviewed before TV support was added are
+  // stored under the old key format (no media type in the key, e.g. "tmdb-123"
+  // instead of "tmdb-movie-123"). If nothing turns up under the new key, check
+  // the old one before giving up — and keep using it, so everyone's existing
+  // reviews for that movie stay together instead of splitting into two records.
+  let review = firstReview;
+  if(!review && mediaType === 'movie'){
+    const legacyKey = `tmdb-${m.tmdb_id}`;
+    const legacyReview = await getReview(legacyKey);
+    if(legacyReview){ key = legacyKey; review = legacyReview; }
+  }
+
   const full = detail || { ...m, media_type: mediaType };
   full.similar = await fetchRelatedMovies(full).catch(()=>[]);
   renderDetail(full, key, review || { title: full.title, year: full.year, poster_path: full.poster_path, overview: full.overview, media_type: mediaType, entries:{} });
