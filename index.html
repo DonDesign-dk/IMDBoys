@@ -355,6 +355,10 @@
       <button class="navbtn" id="mine-toggle-all" data-mode="all">Alle anmeldelser</button>
     </div>
     <div class="sortrow">
+      <label for="all-person-filter" id="all-person-filter-label" style="display:none;">Filtrér på person</label>
+      <select class="sortselect" id="all-person-filter" style="display:none;">
+        <option value="">Alle</option>
+      </select>
       <label for="mine-sort">Sortér</label>
       <select class="sortselect" id="mine-sort">
         <option value="date">Nyeste anmeldt</option>
@@ -582,6 +586,13 @@ document.addEventListener('click', (e)=>{
     const opt = document.createElement('option');
     opt.value = name; opt.textContent = name;
     watchSel.appendChild(opt);
+  });
+
+  const personFilter = document.getElementById('all-person-filter');
+  FRIENDS.forEach(name=>{
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    personFilter.appendChild(opt);
   });
 })();
 
@@ -1316,14 +1327,21 @@ async function allReviewedMoviesRows(){
 }
 
 async function loadAllReviews(){
-  document.getElementById('mine-title').textContent = 'Alle anmeldelser';
+  const filterName = document.getElementById('all-person-filter').value;
+  document.getElementById('mine-title').textContent = filterName ? `Alle anmeldelser · ${filterName}` : 'Alle anmeldelser';
   const mode = document.getElementById('mine-sort').value;
-  const rows = sortReviewRows(await allReviewedMoviesRows(), mode);
+  const rows = sortReviewRows(
+    filterName ? await reviewRowsForName(filterName) : await allReviewedMoviesRows(),
+    mode
+  );
   renderReviewGrid(document.getElementById('mine-grid'), document.getElementById('mine-count'), rows,
-    'Ingen anmeldelser endnu &mdash; find en film under "Film".');
+    filterName ? `${esc(filterName)} har ikke anmeldt noget endnu.` : 'Ingen anmeldelser endnu &mdash; find en film under "Film".');
 }
 
 function loadReviewsScreen(){
+  const showFilter = state.reviewsMode === 'all';
+  document.getElementById('all-person-filter').style.display = showFilter ? 'inline-block' : 'none';
+  document.getElementById('all-person-filter-label').style.display = showFilter ? 'block' : 'none';
   if(state.reviewsMode === 'all') loadAllReviews(); else loadMyReviews();
 }
 
@@ -1417,9 +1435,10 @@ document.getElementById('tab-main').onclick = ()=>{
 };
 document.getElementById('tab-mine').onclick = ()=>{
   state.reviewsMode = 'mine';
+  document.getElementById('all-person-filter').value = '';
   updateReviewsToggleUI();
   showScreen('screen-my-reviews');
-  loadMyReviews();
+  loadReviewsScreen();
   pushNav('screen-my-reviews', { mode: 'mine' });
 };
 document.getElementById('tab-stats').onclick = ()=>{
@@ -1450,13 +1469,15 @@ function updateReviewsToggleUI(){
   document.getElementById('mine-toggle-all').classList.toggle('active', state.reviewsMode === 'all');
 }
 document.getElementById('mine-toggle-mine').onclick = ()=>{
-  state.reviewsMode = 'mine'; updateReviewsToggleUI(); loadMyReviews();
+  state.reviewsMode = 'mine'; document.getElementById('all-person-filter').value = '';
+  updateReviewsToggleUI(); loadReviewsScreen();
   pushNav('screen-my-reviews', { mode: 'mine' });
 };
 document.getElementById('mine-toggle-all').onclick = ()=>{
-  state.reviewsMode = 'all'; updateReviewsToggleUI(); loadAllReviews();
+  state.reviewsMode = 'all'; updateReviewsToggleUI(); loadReviewsScreen();
   pushNav('screen-my-reviews', { mode: 'all' });
 };
+document.getElementById('all-person-filter').onchange = ()=> loadAllReviews();
 
 history.replaceState({ screenId: 'screen-main', params: {} }, '', location.href);
 
