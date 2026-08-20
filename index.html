@@ -179,6 +179,14 @@
     color:var(--text);cursor:pointer;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;transition:.12s;}
   .scorebtn:hover{border-color:var(--accent);}
   .scorebtn.active{background:var(--accent);color:#171308;border-color:var(--accent);}
+  .where-toggle{display:flex;gap:8px;margin-bottom:14px;}
+  .where-btn{
+    flex:1;padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border);
+    background:var(--panel-2);color:var(--text);cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;
+  }
+  .where-btn:hover{border-color:var(--accent);}
+  .where-btn.active{background:var(--accent);color:#171308;border-color:var(--accent);}
+  .review-where{color:var(--muted);font-size:11px;margin-top:4px;}
   textarea{width:100%;padding:11px 13px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--panel-2);
     color:var(--text);font-family:inherit;font-size:14px;resize:vertical;min-height:64px;margin-bottom:14px;}
   button.primary{width:100%;padding:13px;border-radius:var(--radius-sm);border:none;background:var(--accent);color:#171308;
@@ -302,7 +310,7 @@
   <div class="patchnotes-box">
     <div class="patchnotes-kicker">Nye tilføjelser</div>
     <ul>
-      <li>Velkommen Nicko og Viktor! 🎉</li>
+      <li>Du kan nu tilføje <b>hvor du så filmen/serien</b> &mdash; i biffen (og evt. 3D/IMAX/70mm m.m.) eller i stuen (og evt. hvilken streamingtjeneste).</li>
     </ul>
     <button class="primary" id="patchnotes-close-btn">Forstået!</button>
   </div>
@@ -609,7 +617,7 @@ async function getReview(key){
   const doc = await db.collection('reviews').doc(key).get();
   return doc.exists ? doc.data() : null;
 }
-async function saveReview(key, movie, score, comment){
+async function saveReview(key, movie, score, comment, where, whereDetail){
   const ref = db.collection('reviews').doc(key);
   const doc = await ref.get();
   const data = doc.exists ? doc.data() : {
@@ -617,7 +625,7 @@ async function saveReview(key, movie, score, comment){
     genres: movie.genres || [], director: movie.director || '', companies: movie.companies || [], entries:{},
     media_type: movie.media_type || 'movie'
   };
-  data.entries[currentUser()] = { score, comment, date: new Date().toISOString() };
+  data.entries[currentUser()] = { score, comment, date: new Date().toISOString(), where: where || '', whereDetail: whereDetail || '' };
   await ref.set(data);
   removeFromWatchlist(currentUser(), key).catch(()=>{});
 }
@@ -666,6 +674,15 @@ async function toggleReaction(key, reviewerName, type){
     data.entries[reviewerName].reactions[me] = type;
   }
   await ref.set(data);
+}
+
+const STREAMING_OPTIONS = ['Netflix', 'Disney+', 'HBO Max', 'Viaplay', 'SkyShowtime', 'Amazon Prime Video', 'Apple TV+', 'TV 2 Play', 'DR TV', 'Andet'];
+const CINEMA_FORMATS = ['Almindelig', '3D', 'IMAX', '70mm', '4DX', 'Andet'];
+
+function whereLabel(where, detail){
+  if(where === 'cinema') return `&#127916; Biffen${detail ? ` &middot; ${esc(detail)}` : ''}`;
+  if(where === 'home') return `&#127968; Stuen${detail ? ` &middot; ${esc(detail)}` : ''}`;
+  return '';
 }
 
 const REACTION_TYPES = [
@@ -1000,6 +1017,16 @@ function renderDetail(m, key, reviewData){
       <div class="scores-row" id="score-row"></div>
       <label>Kommentar (valgfri)</label>
       <textarea id="comment-input" placeholder="Hvad synes du?">${mine ? esc(mine.comment||'') : ''}</textarea>
+      <label>Hvor så du den? (valgfri)</label>
+      <div class="where-toggle" id="where-row">
+        <button type="button" class="where-btn" data-where="home">&#127968; Stuen</button>
+        <button type="button" class="where-btn" data-where="cinema">&#127916; Biffen</button>
+      </div>
+      <div id="where-detail-wrap" style="display:none;">
+        <label id="where-detail-label">Detaljer</label>
+        <select class="sortselect" id="where-detail-select" style="width:100%;margin-bottom:14px;"></select>
+        <input type="text" id="where-detail-custom" placeholder="Skriv hvad..." style="display:none;margin-bottom:14px;">
+      </div>
       <button class="primary" id="save-review-btn">${mine ? 'Opdatér din anmeldelse' : 'Gem din anmeldelse'}</button>
       ${mine ? `<button class="deletebtn" id="delete-review-btn">Slet din anmeldelse</button>` : ''}
     </div>
@@ -1025,6 +1052,7 @@ function renderDetail(m, key, reviewData){
               <div class="score">${entries[n].score}/10</div>
             </div>
             ${entries[n].comment ? `<div class="comment">${esc(entries[n].comment)}</div>` : ''}
+            ${entries[n].where ? `<div class="review-where">${whereLabel(entries[n].where, entries[n].whereDetail)}</div>` : ''}
             ${reactionsHtml(n, entries[n].reactions)}
           </div>
         </div>`).join('') : '<div class="empty">Ingen har anmeldt den her endnu &mdash; vær den første.</div>'}
@@ -1113,16 +1141,79 @@ function renderDetail(m, key, reviewData){
     row.appendChild(b);
   }
 
+  let selectedWhere = mine ? (mine.where || null) : null;
+  const whereWrap = document.getElementById('where-detail-wrap');
+  const whereSelect = document.getElementById('where-detail-select');
+  const whereLabelEl = document.getElementById('where-detail-label');
+  const whereCustom = document.getElementById('where-detail-custom');
+
+  function toggleCustomInput(){
+    if(whereSelect.value === 'Andet'){
+      whereCustom.style.display = 'block';
+    } else {
+      whereCustom.style.display = 'none';
+      whereCustom.value = '';
+    }
+  }
+
+  function refreshWhereDetailOptions(){
+    let options;
+    if(selectedWhere === 'home'){
+      whereLabelEl.textContent = 'Streamingtjeneste';
+      options = STREAMING_OPTIONS;
+    } else if(selectedWhere === 'cinema'){
+      whereLabelEl.textContent = 'Format';
+      options = CINEMA_FORMATS;
+    } else {
+      whereWrap.style.display = 'none';
+      return;
+    }
+    whereWrap.style.display = 'block';
+    whereSelect.innerHTML = options.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('');
+    whereCustom.value = '';
+    whereCustom.style.display = 'none';
+
+    if(mine && mine.where === selectedWhere && mine.whereDetail){
+      if(options.includes(mine.whereDetail)){
+        whereSelect.value = mine.whereDetail;
+      } else {
+        // a custom "Andet" value was saved previously — select "Andet" and prefill the text
+        whereSelect.value = 'Andet';
+        whereCustom.value = mine.whereDetail;
+        whereCustom.style.display = 'block';
+      }
+    }
+  }
+
+  whereSelect.addEventListener('change', toggleCustomInput);
+
+  document.querySelectorAll('#where-row .where-btn').forEach(btn=>{
+    if(btn.dataset.where === selectedWhere) btn.classList.add('active');
+    btn.onclick = ()=>{
+      selectedWhere = (selectedWhere === btn.dataset.where) ? null : btn.dataset.where;
+      document.querySelectorAll('#where-row .where-btn').forEach(b=>b.classList.remove('active'));
+      if(selectedWhere) btn.classList.add('active');
+      refreshWhereDetailOptions();
+    };
+  });
+  refreshWhereDetailOptions();
+
   document.getElementById('save-review-btn').onclick = async ()=>{
     if(!selected){ alert('Vælg en score fra 1-10 først.'); return; }
     const comment = document.getElementById('comment-input').value.trim();
+    let whereDetailVal = '';
+    if(selectedWhere){
+      whereDetailVal = whereSelect.value === 'Andet'
+        ? (whereCustom.value.trim() || 'Andet')
+        : whereSelect.value;
+    }
     await saveReview(key, {
       title:m.title, year:m.year, poster_path: reviewData.poster_path || m.poster_path, overview,
       genres: m.genres || reviewData.genres || [],
       director: m.director || reviewData.director || '',
       companies: m.companies || reviewData.companies || [],
       media_type: mediaType
-    }, selected, comment);
+    }, selected, comment, selectedWhere, whereDetailVal);
     const updated = await getReview(key);
     renderDetail(m, key, updated);
     loadRecentReviews();
@@ -1165,6 +1256,7 @@ async function loadRecentReviews(){
           <div class="score">${r.score}/10</div>
         </div>
         ${r.comment ? `<div class="comment">${esc(r.comment)}</div>` : ''}
+        ${r.where ? `<div class="review-where">${whereLabel(r.where, r.whereDetail)}</div>` : ''}
         ${reactionsHtml(r.name, r.reactions)}
       </div>
     </div>
@@ -1217,6 +1309,7 @@ function renderReviewGrid(gridEl, countEl, rows, emptyText){
         <div class="scorebadge">${r.score}/10</div>
         <div class="meta"><h4>${esc(r.title)}</h4><div class="year">${esc(r.year) || '—'}</div></div>
         ${r.comment ? `<div class="cardcomment">${esc(r.comment)}</div>` : ''}
+        ${r.where ? `<div class="cardcomment" style="padding-top:0;">${whereLabel(r.where, r.whereDetail)}</div>` : ''}
       </div>`;
   }).join('')}</div>`;
   gridEl.querySelectorAll('[data-key]').forEach(card=>{
@@ -1482,7 +1575,7 @@ document.getElementById('all-person-filter').onchange = ()=> loadAllReviews();
 history.replaceState({ screenId: 'screen-main', params: {} }, '', location.href);
 
 /* ---------- patch notes (shown once per person, bump PATCH_NOTE_VERSION to show again) ---------- */
-const PATCH_NOTE_VERSION = 'v5';
+const PATCH_NOTE_VERSION = 'v6';
 if(localStorage.getItem('imdboys-seen-patch') !== PATCH_NOTE_VERSION){
   document.getElementById('patchnotes-overlay').style.display = 'flex';
 }
